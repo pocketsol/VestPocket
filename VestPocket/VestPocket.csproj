@@ -11,10 +11,13 @@
       key prefix lookups, AOT friendly serialization, and an on-disk format that can be merged using conventional merge tools.
     </Description>
     <PackageTags>cache json record</PackageTags>
-    <!--<PackageIcon>packageIcon.png</PackageIcon>
-    <PackageIconUrl></PackageIconUrl>
-    <PackageProjectUrl></PackageProjectUrl>-->
+    <PackageIcon>icon.png</PackageIcon>
+    <PackageProjectUrl>https://github.com/keithwill/VestPocket</PackageProjectUrl>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
   </PropertyGroup>
+
+  <ItemGroup>
+      <None Include="images\icon.png" Pack="true" PackagePath="\"/>
+  </ItemGroup>
   
 </Project>
