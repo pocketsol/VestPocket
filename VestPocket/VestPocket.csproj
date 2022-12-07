@@ -14,6 +14,8 @@
     <PackageIcon>icon.png</PackageIcon>
     <PackageProjectUrl>https://github.com/keithwill/VestPocket</PackageProjectUrl>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <RepositoryUrl>https://github.com/keithwill/VestPocket</RepositoryUrl>
+    <RepositoryType>github</RepositoryType>
   </PropertyGroup>
 
   <ItemGroup>
