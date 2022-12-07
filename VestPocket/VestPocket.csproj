@@ -1,0 +1,20 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net7.0</TargetFramework>
+    <PackageId>VestPocket</PackageId>
+    <Title>Vest Pocket</Title>
+    <Version>0.1.0</Version>
+    <Authors>ketihwill</Authors>
+    <Description>
+      A lookup that is persisted to an append-only file. It supports immutable records, optimistic concurrency,
+      key prefix lookups, AOT friendly serialization, and an on-disk format that can be merged using conventional merge tools.
+    </Description>
+    <PackageTags>cache json record</PackageTags>
+    <!--<PackageIcon>packageIcon.png</PackageIcon>
+    <PackageIconUrl></PackageIconUrl>
+    <PackageProjectUrl></PackageProjectUrl>-->
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+  </PropertyGroup>
+  
+</Project>
