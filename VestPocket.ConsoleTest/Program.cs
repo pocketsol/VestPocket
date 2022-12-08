@@ -7,6 +7,8 @@ using System.Runtime.CompilerServices;
 using System.Text.Json.Serialization;
 using System.Threading;
 using System.Threading.Tasks;
+using LiteDB;
+using System.Collections.Concurrent;
 
 namespace VestPocket.ConsoleTest
 {
@@ -14,39 +16,32 @@ namespace VestPocket.ConsoleTest
 
     class Program
     {
-        static Connection<Entity> engine;
-       
+        static Connection<Entity> connection;
+
 
         static async Task Main(string[] args)
         {
+            RemoveDatabaseFiles();
 
-            if (System.IO.File.Exists("test.db"))
-            {
-                engine = Connection<Entity>.Create("test.db", SourceGenerationContext.Default.Entity);
-                await engine.OpenAsync(CancellationToken.None);
 
-                await TimeIterations("Read Entities", (thread, i) => {
-                    engine.Get<Entity>($"{thread}-{i}");
-                    return Task.CompletedTask;
-                }, 100, 1000);
-                await engine.ForceMaintenance();
-
-                await engine.Close(CancellationToken.None);
-
-                System.IO.File.Delete("test.db");
-            }
-
-            engine = Connection<Entity>.Create("test.db", SourceGenerationContext.Default.Entity);
-            await engine.OpenAsync(CancellationToken.None);
+            Console.WriteLine("---------Running VestPocket---------");
+            connection = Connection<Entity>.Create("test.db", SourceGenerationContext.Default.Entity);
+            await connection.OpenAsync(CancellationToken.None);
 
             await TimeIterations("Save Entities", async (thread, i) =>
             {
-                await engine.Save(new Entity($"{thread}-{i}", 0, false, $"""Body Longer Text to take up more space"""));
-            }, 100, 1000);
+                await connection.Save(new Entity($"{thread}-{i}", 0, false, $"""Just some body text {thread}-{i}"""));
+            }, 1000, 100);
+
+            await TimeIterations("Read Entities", (thread, i) =>
+            {
+                connection.Get<Entity>($"{thread}-{i}");
+                return Task.CompletedTask;
+            }, 1000, 100);
 
             await TimeIterations("Prefix Search", (thread, i) =>
             {
-                var results = engine.GetByPrefix<Entity>(thread.ToString() + "-123", false);
+                var results = connection.GetByPrefix<Entity>(thread.ToString() + "-123", false);
                 foreach (var result in results)
                 {
                     if (result == null)
@@ -55,9 +50,130 @@ namespace VestPocket.ConsoleTest
                     }
                 }
                 return Task.CompletedTask;
-            }, 100, 1000);
+            }, 1000, 100);
 
-            await engine.Close(CancellationToken.None);
+            await TimeIterations("Read and Write Mix", async (thread, i) =>
+            {
+                var entity = connection.Get<Entity>($"{thread}-{i}");
+                await connection.Save(entity);
+                entity = connection.Get<Entity>($"{thread}-{i}");
+                entity = connection.Get<Entity>($"{thread}-{i}");
+                entity = await connection.Save(entity);
+                entity = connection.Get<Entity>($"{thread}-{i}");
+                entity = connection.Get<Entity>($"{thread}-{i}");
+            }, 1000, 100);
+
+            await connection.Close(CancellationToken.None);
+            Console.WriteLine();
+
+            Console.WriteLine("----Running ConcurrentDictionary----");
+
+            ConcurrentDictionary<string, Entity> dictionary = new();
+            await TimeIterations("ConcurrentDictionary Save Entities", (thread, i) =>
+            {
+                var entity = new Entity($"{thread}-{i}", 0, false, $"""Just some body text {thread}-{i}""");
+                dictionary.AddOrUpdate(entity.Key, entity, (k, e) => e);
+                return Task.CompletedTask;
+            }, 1000, 100);
+
+            await TimeIterations("ConcurrentDictionary Read Entities", (thread, i) =>
+            {
+                var key = $"{thread}-{i}";
+                dictionary.TryGetValue(key, out var entity);
+                return Task.CompletedTask;
+            }, 1000, 100);
+
+            await TimeIterations("ConcurrentDictionary Read and Write Mix", (thread, i) =>
+            {
+                string key = $"{thread}-{i}";
+                if (dictionary.TryGetValue(key, out var entity))
+                {
+                    dictionary.AddOrUpdate(entity.Key, entity, (k, e) => e);
+                    dictionary.TryGetValue(key, out entity);
+                    dictionary.TryGetValue(key, out entity);
+                    dictionary.AddOrUpdate(entity.Key, entity, (k, e) => e);
+                    dictionary.TryGetValue(key, out entity);
+                    dictionary.TryGetValue(key, out entity);
+                }
+                return Task.CompletedTask;
+            }, 1000, 100);
+            Console.WriteLine();
+
+            Console.WriteLine("----------Running LiteDb-------------");
+            using (var db = new LiteDatabase(@"LiteDb.db"))
+            {
+                var col = db.GetCollection<LiteDbEntity>("customers");
+                col.EnsureIndex(x => x.Key);
+
+                await TimeIterations("LiteDb Save Entities", (thread, i) =>
+                {
+                    string key = $"{thread}-{i}";
+                    string body = $"""Just some body text {thread}-{i}""";
+                    col.Insert(new LiteDbEntity { Key = key, Body = body });
+                    return Task.CompletedTask;
+                }, 1000, 100);
+
+                await TimeIterations("LiteDb Read Entities", (thread, i) =>
+                {
+                    string key = $"{thread}-{i}";
+                    col.FindOne(x => x.Key == key);
+                    return Task.CompletedTask;
+                }, 1000, 100);
+
+                await TimeIterations("LiteDb Get Entities", (thread, i) =>
+                {
+                    string startsWith = thread.ToString() + "-123";
+                    var query = col.Query().Where(x => x.Key.StartsWith(startsWith)).ToList();
+                    foreach (var item in query)
+                    {
+                        if (item == null)
+                        {
+                            throw new Exception("Failed");
+                        }
+                    }
+                    return Task.CompletedTask;
+                }, 1000, 100);
+
+                await TimeIterations("LiteDb Read and Write Mix", async (thread, i) =>
+                {
+                    string key = $"{thread}-{i}";
+                    var entity = col.FindOne(x => x.Key == key);
+                    col.Update(entity);
+                    entity = col.FindOne(x => x.Key == key);
+                    entity = col.FindOne(x => x.Key == key);
+                    col.Update(entity);
+                    entity = col.FindOne(x => x.Key == key);
+                    entity = col.FindOne(x => x.Key == key);
+                }, 1000, 100);
+
+            }
+
+            RemoveDatabaseFiles();
+
+        }
+
+        private static void RemoveDatabaseFiles()
+        {
+            if (System.IO.File.Exists("test.db"))
+            {
+                System.IO.File.Delete("test.db");
+            }
+
+            if (System.IO.File.Exists("LiteDb.db"))
+            {
+                System.IO.File.Delete("test.db");
+            }
+        }
+
+        /// <summary>
+        /// This is smaller than the 'Entity' class, as it is a more fair comparison.
+        /// LiteDb doesn't need or use 'Version' or 'Deleted' fields.
+        /// </summary>
+        public class LiteDbEntity
+        {
+            [BsonId]
+            public string Key { get; set; }
+            public string Body { get; set; }
         }
 
 
@@ -81,7 +197,9 @@ namespace VestPocket.ConsoleTest
                     for (int iterationCount = 0; iterationCount < iterations; iterationCount++)
                     {
                         sw.Start();
-                        await toDo(threadCount, iterationCount);
+                        var threadCountI = threadCount;
+                        var iterationI = iterationCount;
+                        await toDo(threadCountI, iterationI);
                         sw.Stop();
                         taskLatencies[iterationCount] = sw.Elapsed.TotalMilliseconds;
                         sw.Reset();
@@ -103,9 +221,10 @@ namespace VestPocket.ConsoleTest
             var threadMedianSorted = threadLatencyMedian.AsEnumerable().OrderBy(x => x).ToList();
 
             var overallMedian = threadMedianSorted[threadMedianSorted.Count / 2];
-
-            Console.WriteLine($"{activityName} Total Elapsed: {elapsed} - Throughput:{throughput}/s");
-            Console.WriteLine($"{activityName} Average Latency by Thread - Avg:{threadLatencyAverages.Average()} Median:{overallMedian} Max:{threadLatencyAverages.Max()}");
+            Console.WriteLine();
+            Console.WriteLine($"--{activityName} (threads:{threads}, iterations:{iterations})--");
+            Console.WriteLine($"Throughput {throughput.ToString("F0")}/s");
+            Console.WriteLine($"Latency Median: {overallMedian.ToString("N6")} Max:{threadLatencyAverages.Max().ToString("N6")}");
         }
 
     }
