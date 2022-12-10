@@ -16,28 +16,27 @@ namespace VestPocket.ConsoleTest
 
     class Program
     {
-        static Connection<Entity> connection;
+        static VestPocketStore<Entity> connection;
 
 
         static async Task Main(string[] args)
         {
             RemoveDatabaseFiles();
 
-
             Console.WriteLine("---------Running VestPocket---------");
-            connection = Connection<Entity>.Create("test.db", SourceGenerationContext.Default.Entity);
+            connection = new VestPocketStore<Entity>(SourceGenerationContext.Default.Entity, VestPocketOptions.Default);
             await connection.OpenAsync(CancellationToken.None);
 
             await TimeIterations("Save Entities", async (thread, i) =>
             {
                 await connection.Save(new Entity($"{thread}-{i}", 0, false, $"""Just some body text {thread}-{i}"""));
-            }, 1000, 100);
+            }, 100, 100);
 
             await TimeIterations("Read Entities", (thread, i) =>
             {
                 connection.Get<Entity>($"{thread}-{i}");
                 return Task.CompletedTask;
-            }, 1000, 100);
+            }, 100, 100);
 
             await TimeIterations("Prefix Search", (thread, i) =>
             {
@@ -50,7 +49,7 @@ namespace VestPocket.ConsoleTest
                     }
                 }
                 return Task.CompletedTask;
-            }, 1000, 100);
+            }, 100, 100);
 
             await TimeIterations("Read and Write Mix", async (thread, i) =>
             {
@@ -61,9 +60,38 @@ namespace VestPocket.ConsoleTest
                 entity = await connection.Save(entity);
                 entity = connection.Get<Entity>($"{thread}-{i}");
                 entity = connection.Get<Entity>($"{thread}-{i}");
-            }, 1000, 100);
+            }, 100, 100);
 
             await connection.Close(CancellationToken.None);
+            connection.Dispose();
+            Console.WriteLine();
+
+            Console.WriteLine("-----Running VestPocket ReadOnly-----");
+
+            var readOnlyConnection = new VestPocketStore<Entity>(SourceGenerationContext.Default.Entity, VestPocketOptions.DefaultReadOnly);
+            await readOnlyConnection.OpenAsync(CancellationToken.None);
+
+            await TimeIterations("Read Entities", (thread, i) =>
+            {
+                readOnlyConnection.Get<Entity>($"{thread}-{i}");
+                return Task.CompletedTask;
+            }, 100, 100);
+
+            await TimeIterations("Prefix Search", (thread, i) =>
+            {
+                var results = readOnlyConnection.GetByPrefix<Entity>(thread.ToString() + "-123", false);
+                foreach (var result in results)
+                {
+                    if (result == null)
+                    {
+                        throw new Exception("Failed");
+                    }
+                }
+                return Task.CompletedTask;
+            }, 100, 100);
+            readOnlyConnection.Close(CancellationToken.None).Wait();
+            readOnlyConnection.Dispose();
+
             Console.WriteLine();
 
             Console.WriteLine("----Running ConcurrentDictionary----");
@@ -74,14 +102,14 @@ namespace VestPocket.ConsoleTest
                 var entity = new Entity($"{thread}-{i}", 0, false, $"""Just some body text {thread}-{i}""");
                 dictionary.AddOrUpdate(entity.Key, entity, (k, e) => e);
                 return Task.CompletedTask;
-            }, 1000, 100);
+            }, 100, 100);
 
             await TimeIterations("ConcurrentDictionary Read Entities", (thread, i) =>
             {
                 var key = $"{thread}-{i}";
                 dictionary.TryGetValue(key, out var entity);
                 return Task.CompletedTask;
-            }, 1000, 100);
+            }, 100, 100);
 
             await TimeIterations("ConcurrentDictionary Read and Write Mix", (thread, i) =>
             {
@@ -96,7 +124,7 @@ namespace VestPocket.ConsoleTest
                     dictionary.TryGetValue(key, out entity);
                 }
                 return Task.CompletedTask;
-            }, 1000, 100);
+            }, 100, 100);
             Console.WriteLine();
 
             Console.WriteLine("----------Running LiteDb-------------");
@@ -111,14 +139,14 @@ namespace VestPocket.ConsoleTest
                     string body = $"""Just some body text {thread}-{i}""";
                     col.Insert(new LiteDbEntity { Key = key, Body = body });
                     return Task.CompletedTask;
-                }, 1000, 100);
+                }, 100, 100);
 
                 await TimeIterations("LiteDb Read Entities", (thread, i) =>
                 {
                     string key = $"{thread}-{i}";
                     col.FindOne(x => x.Key == key);
                     return Task.CompletedTask;
-                }, 1000, 100);
+                }, 100, 100);
 
                 await TimeIterations("LiteDb Get Entities", (thread, i) =>
                 {
@@ -132,9 +160,9 @@ namespace VestPocket.ConsoleTest
                         }
                     }
                     return Task.CompletedTask;
-                }, 1000, 100);
+                }, 100, 100);
 
-                await TimeIterations("LiteDb Read and Write Mix", async (thread, i) =>
+                await TimeIterations("LiteDb Read and Write Mix", (thread, i) =>
                 {
                     string key = $"{thread}-{i}";
                     var entity = col.FindOne(x => x.Key == key);
@@ -144,7 +172,8 @@ namespace VestPocket.ConsoleTest
                     col.Update(entity);
                     entity = col.FindOne(x => x.Key == key);
                     entity = col.FindOne(x => x.Key == key);
-                }, 1000, 100);
+                    return Task.CompletedTask;
+                }, 100, 100);
 
             }
 
@@ -154,14 +183,15 @@ namespace VestPocket.ConsoleTest
 
         private static void RemoveDatabaseFiles()
         {
-            if (System.IO.File.Exists("test.db"))
+            var fileName = VestPocketOptions.Default.FilePath;
+            if (System.IO.File.Exists(fileName))
             {
-                System.IO.File.Delete("test.db");
+                System.IO.File.Delete(fileName);
             }
 
             if (System.IO.File.Exists("LiteDb.db"))
             {
-                System.IO.File.Delete("test.db");
+                System.IO.File.Delete("LiteDb.db");
             }
         }
 

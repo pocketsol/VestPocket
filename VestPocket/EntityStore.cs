@@ -13,9 +13,9 @@ internal class EntityStore<T> where T : class, IEntity
     private long entityCount;
     public long DeadEntityCount => deadEntityCount;
     public long EntityCount => entityCount;
-    public EntityStore()
+    public EntityStore(bool synchronized)
     {
-        lookup = new();
+        lookup = new(synchronized);
     }
 
     /// <summary>

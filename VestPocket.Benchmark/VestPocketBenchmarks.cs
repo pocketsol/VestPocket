@@ -16,7 +16,7 @@ namespace VestPocket.Benchmark
     {
 
         public int N = 999_999;
-        private Connection<Entity> connection;
+        private VestPocketStore<Entity> store;
         private string testKey = "123456";
         private Entity testDocument;
 
@@ -27,40 +27,40 @@ namespace VestPocket.Benchmark
 
         private void SetupConnection()
         {
-            Console.WriteLine("Setting up bench.db");
-            if (System.IO.File.Exists("bench.db"))
+            var dbFile = VestPocketOptions.Default.FilePath;
+            if (System.IO.File.Exists(dbFile))
             {
-                System.IO.File.Delete("bench.db");
+                System.IO.File.Delete(dbFile);
             }
 
-            connection = Connection<Entity>.Create("bench.db", SourceGenerationContext.Default.Entity);
-            connection.OpenAsync(CancellationToken.None).Wait();
+            store = new VestPocketStore<Entity>(SourceGenerationContext.Default.Entity, VestPocketOptions.Default);
+            store.OpenAsync(CancellationToken.None).Wait();
 
             Task[] setResults = new Task[N];
             for (int i = 0; i < N; i++)
             {
-                setResults[i] = connection.Save(new Entity(i.ToString(), 0, false, $"Test Body {i}"));
+                setResults[i] = store.Save(new Entity(i.ToString(), 0, false, $"Test Body {i}"));
             }
             Task.WaitAll(setResults);
-            testDocument = connection.Get<Entity>(testKey);
+            testDocument = store.Get<Entity>(testKey);
         }
 
         [Benchmark]
         public void GetByKey()
         {
-            var document = connection.Get<Entity>(testKey);
+            var document = store.Get<Entity>(testKey);
         }
 
         [Benchmark]
         public async Task SetKey()
         {
-            testDocument = await connection.Save(testDocument);
+            testDocument = await store.Save(testDocument);
         }
 
         [Benchmark]
         public void GetKeyPrefix()
         {
-            var results = connection.GetByPrefix<Entity>("12345", false);
+            var results = store.GetByPrefix<Entity>("12345", false);
             foreach (var result in results)
             {
                 if (result.Key == null)

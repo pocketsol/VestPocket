@@ -54,20 +54,21 @@ Then add a JsonDerivedType attribute to the base entity for the new entity type.
 
 # Usage
 
-## Opening a Connection
+## Opening a Store
 
 ```csharp
-    var connection = Connection<Entity>.Create("test.db", VestPocketJsonContext.Default.Entity);
-    await connection.OpenAsync(CancellationToken.None);
+    var options = new VestPocketOptions { FilePath = "test.db" };
+    var store = new VestPocketStore<Entity>(VestPocketJsonContext.Default.Entity, options);
+    await store.OpenAsync(CancellationToken.None);
 ```
  
- The Connection will maintain exclusive read write access on the opened file. The methods on Connection are thread safe, it is safe to pass a single instance of a Connection between methods on different threads (for example, you could register a Connection object as a singleton or single instance lifecycle for use in DI/IoC).
+ The store will maintain exclusive read write access on the opened file. The methods on a VestPocketStore are thread safe; it is safe to pass a single instance of a store between methods on different threads (for example, you could register a store object as a singleton or single instance lifecycle for use in DI/IoC).
 
  ## Saving a Record
 
  ```csharp
     var testEntity = new Entity("testKey", 0, false);
-    var updatedEntity = await connection.Save(testEntity);
+    var updatedEntity = await store.Save(testEntity);
 ```
 Entities are immutable. After a save, a new instance of the entity is returned with the increased version number. In the example above, testEntity will have a version of 0, and updatedEntity will have a version of 1.
 
@@ -75,13 +76,13 @@ If you attempt to save an entity with a version number that does not match the v
 
 ## Getting a Record by Key
  ```csharp
-    var entity = await connection.Get<Entity>("testKey");
+    var entity = await store.Get<Entity>("testKey");
 ```
 
 ## Getting Records by a Key Prefix
  ```csharp
  
-    var entities = await connection.GetByPrefix<Entity>("test");
+    var entities = await store.GetByPrefix<Entity>("test");
     foreach(var entity in entities)
     {
         //...
@@ -90,32 +91,32 @@ If you attempt to save an entity with a version number that does not match the v
 
 ## Deleting a Record
  ```csharp
-    var entity = await connection.Get<Entity>("testKey");
+    var entity = await store.Get<Entity>("testKey");
     var entityToDelete = entity with { Deleted = true };
-    await connection.Save(entity);
+    await store.Save(entity);
 ```
 
  ## Saving a Transaction
 
  ```csharp
 
-    var testEntity = connection.Get<Entity>("testKey");
+    var testEntity = store.Get<Entity>("testKey");
     var deletedTestEntity = testEntity with { Deleted = true };
     var entity1 = new Entity("entity1", 0, false);
     var entity2 = new Entity("entity2", 0, false);
 
     var entities = new[] { entity1, entity2, deletedTestEntity };
 
-    var updatedEntities = await connection.Save(entities);
+    var updatedEntities = await store.Save(entities);
 
 ```
 Changes to multiple entities can be saved at the same time. If any entity has an out of date Version, then no changes will be applied.
 
-## Closing the Connection
+## Closing the Store
  ```csharp
-    await connection.Close(CancellationToken.None);
+    await store.Close(CancellationToken.None);
 ```
-The database connection should be closed before the application shuts down whenever possible. This will allow any ongoing file rewrite to complete and a graceful shutdown of transactions that are currently being processed. The cancellation token can be passed to control if the close method should cancel any shutdown activities (such as waiting for a rewrite to finish). As of v0.1.0, this has not yet been implemented.  
+The store should be closed before the application shuts down whenever possible. This will allow any ongoing file rewrite to complete and a graceful shutdown of transactions that are currently being processed. The cancellation token can be passed to control if the close method should cancel any shutdown activities (such as waiting for a rewrite to finish). As of v0.1.0, this has not yet been implemented.  
 
 # File Format
 The file format is trivial. After a transaction is accepted, each entity in the transaction is serialized using System.Text.Json to a single line of text. The file store is an append only file, and old versions of entities are left in the file.

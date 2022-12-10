@@ -8,6 +8,9 @@ public class Program
 {
     public static void Main(string[] args)
     {
-        var summary = BenchmarkRunner.Run<VestPocketBenchmarks>(config: DefaultConfig.Instance.AddJob(Job.Default.WithMaxRelativeError(.05)));
+        var summary = BenchmarkRunner.Run<VestPocketBenchmarks>(
+            config: DefaultConfig.Instance
+                .AddJob(Job.Default.WithMaxRelativeError(.05))
+        );
     }
 }

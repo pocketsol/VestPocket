@@ -19,9 +19,10 @@ internal class TransactionLog<T> : IDisposable where T : class, IEntity
     private readonly Func<Stream, Stream, Stream> swapRewriteStreamCallback;
     private readonly EntityStore<T> memoryStore;
     private readonly JsonTypeInfo<T> jsonTypeInfo;
+    private readonly VestPocketOptions options;
     private Task flushTask;
     private int unflushed = 0;
-    private object writeLock = new object();
+    private readonly object writeLock = new();
     private Task rewriteTask;
     private bool isDisposing = false;
 
@@ -33,7 +34,8 @@ internal class TransactionLog<T> : IDisposable where T : class, IEntity
         Func<Stream> rewriteStreamFactory,
         Func<Stream, Stream, Stream> swapRewriteStreamCallback,
         EntityStore<T> memoryStore,
-        JsonTypeInfo<T> jsonTypeInfo
+        JsonTypeInfo<T> jsonTypeInfo,
+        VestPocketOptions options
         )
     {
         this.outputStream = outputStream;
@@ -41,13 +43,13 @@ internal class TransactionLog<T> : IDisposable where T : class, IEntity
         this.swapRewriteStreamCallback = swapRewriteStreamCallback;
         this.memoryStore = memoryStore;
         this.jsonTypeInfo = jsonTypeInfo;
+        this.options = options;
     }
 
     private void Rewrite()
     {
         var startingLength = outputStream.Length;
-        long endingLength = 0;
-        //Console.WriteLine("Starting rewrite");
+        //long endingLength = 0;
 
         var itemsRewritten = 0;
 
@@ -62,7 +64,6 @@ internal class TransactionLog<T> : IDisposable where T : class, IEntity
                     string path = fs.Name;
                     fs.Dispose();
                     File.Delete(path);
-                    //Console.WriteLine("Cancelled rewrite");
                 }
                 return;
             }
@@ -75,11 +76,11 @@ internal class TransactionLog<T> : IDisposable where T : class, IEntity
         }
         rewriteStream.Flush();
 
-        var sw = Stopwatch.StartNew();
+        //var sw = Stopwatch.StartNew();
 
         lock (writeLock)
         {
-            endingLength = rewriteStream.Length;
+            //endingLength = rewriteStream.Length;
             outputStream = swapRewriteStreamCallback(outputStream, rewriteStream);
             rewriteTailBuffer.WriteTo(outputStream);
             rewriteTailBuffer.Dispose();
@@ -87,13 +88,14 @@ internal class TransactionLog<T> : IDisposable where T : class, IEntity
             rewriteTailBuffer = null;
         }
 
-        var elapsed = sw.Elapsed;
+        //var elapsed = sw.Elapsed;
         //Console.WriteLine($"Rewrote db - {itemsRewritten} items in {elapsed.TotalMilliseconds} - FROM {startingLength} TO {endingLength}");
 
     }
 
     public void StartFileManagement()
     {
+        if (options.ReadOnly) { return; }
 
         if (flushTask == null)
         {
@@ -138,7 +140,14 @@ internal class TransactionLog<T> : IDisposable where T : class, IEntity
     public async IAsyncEnumerable<T> LoadRecords([EnumeratorCancellation] CancellationToken cancellationToken)
     {
 
-        using var sr = new StreamReader(outputStream, Encoding.UTF8, leaveOpen: true);
+        if (outputStream.Length == 0)
+        {
+            yield break;
+        }
+
+        var leaveOpen = !options.ReadOnly;
+
+        using var sr = new StreamReader(outputStream, Encoding.UTF8, leaveOpen: leaveOpen);
 
         while (!cancellationToken.IsCancellationRequested)
         {
@@ -162,8 +171,6 @@ internal class TransactionLog<T> : IDisposable where T : class, IEntity
                 {
                     yield return entity;
                 }
-
-
             }
         }
 
@@ -171,7 +178,9 @@ internal class TransactionLog<T> : IDisposable where T : class, IEntity
 
     public void Dispose()
     {
+        if (isDisposing) return;
         isDisposing = true;
+
         if (outputStream == null)
         {
             return;
@@ -229,7 +238,7 @@ internal class TransactionLog<T> : IDisposable where T : class, IEntity
             {
             
                 var ratio = memoryStore.DeadEntityCount / memoryStore.EntityCount;
-                if (ratio > 1.0 && memoryStore.EntityCount > 10000)
+                if (ratio > options.RewriteRatio && memoryStore.EntityCount > options.RewriteMinimum)
                 {
                     rewriteTailBuffer = new MemoryStream();
                     rewriteStream = rewriteStreamFactory();
