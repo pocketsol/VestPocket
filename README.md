@@ -217,3 +217,16 @@ Before running the benchmark above, 999,999 entities are stored by key.
 * GetByKey - Retreives a single entity by key
 * SetKey - Updates an entity by key
 * GetKeyPrefix - Performs a prefix search to retreive a small number of elements
+
+
+# VestPocketOptions
+
+## ReadOnly
+
+```csharp
+    var options = new VestPocketOptions { FilePath = "test.db", ReadOnly = true };
+    var store = new VestPocketStore<Entity>(VestPocketJsonContext.Default.Entity, options);
+    await store.OpenAsync(CancellationToken.None);
+```
+
+If you open a store with the ReadOnly option, then write operations will throw exceptions, and getting entities from the store will have improved performance (threading primitives to coordinate safe reading and writing can be skipped).
