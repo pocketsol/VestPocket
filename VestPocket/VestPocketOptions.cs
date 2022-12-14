@@ -47,7 +47,7 @@ public class VestPocketOptions
     /// If set, then the live records will be stored as a compressed
     /// block at the start of the rewritten file.
     /// </summary>
-    // public bool CompressOnRewrite {get;set;} = false;
+    public bool CompressOnRewrite {get;set;} = false;
 
     /// <summary>
     /// Returns the first validation failure message, or null if the options appear valid

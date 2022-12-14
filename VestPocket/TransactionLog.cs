@@ -3,6 +3,7 @@ using System.IO;
 using System.Runtime.CompilerServices;
 using System.Text.Json;
 using System.Text.Json.Serialization.Metadata;
+using System.IO.Compression;
 
 namespace VestPocket;
 
@@ -29,6 +30,8 @@ internal class TransactionLog<T> : IDisposable where T : class, IEntity
     private MemoryStream rewriteTailBuffer;
     private Stream rewriteStream;
 
+    private StoreHeader header;
+
     public TransactionLog(
         Stream outputStream,
         Func<Stream> rewriteStreamFactory,
@@ -46,50 +49,64 @@ internal class TransactionLog<T> : IDisposable where T : class, IEntity
         this.options = options;
     }
 
-    private void Rewrite()
+    private async Task Rewrite()
     {
+        
         var startingLength = outputStream.Length;
-        //long endingLength = 0;
 
         var itemsRewritten = 0;
 
         var allItems = memoryStore.GetByPrefix<T>("", false).ToArray();
+        
+        Stream stream = rewriteStream;
+        if (isDisposing) { return; }
 
-        foreach (var item in allItems)
+        if (this.header == null)
         {
-            if (isDisposing)
-            {
-                if (rewriteStream is FileStream fs)
-                {
-                    string path = fs.Name;
-                    fs.Dispose();
-                    File.Delete(path);
-                }
-                return;
-            }
-            if (itemsRewritten > 0)
-            {
-                this.rewriteStream.WriteByte(LF);
-            }
-            JsonSerializer.Serialize(rewriteStream, item, jsonTypeInfo);
-            itemsRewritten++;
+            this.header = new StoreHeader();
+            this.header.Creation = DateTimeOffset.Now;
         }
-        rewriteStream.Flush();
 
-        //var sw = Stopwatch.StartNew();
+        if (options.CompressOnRewrite)
+        {
+            header.CompressedEntities = GetCompressedRewriteSegments(allItems, CancellationToken.None);
+        }
+
+        this.header.LastRewrite = DateTimeOffset.Now;
+
+        await JsonSerializer.SerializeAsync(
+            rewriteStream,
+            header,
+            InternalSerializationContext.Default.StoreHeader,
+            CancellationToken.None
+        );
+
+        rewriteStream.WriteByte(LF);
+
+        if (!options.CompressOnRewrite)
+        {
+            foreach (var item in allItems)
+            {
+                if (isDisposing) return;
+                JsonSerializer.Serialize(stream, item, jsonTypeInfo);
+                stream.WriteByte(LF);
+                itemsRewritten++;
+            }
+        }
+
+        stream.Flush();
+
 
         lock (writeLock)
         {
-            //endingLength = rewriteStream.Length;
             outputStream = swapRewriteStreamCallback(outputStream, rewriteStream);
             rewriteTailBuffer.WriteTo(outputStream);
             rewriteTailBuffer.Dispose();
             rewriteStream = null;
             rewriteTailBuffer = null;
+            header.CompressedEntities = null;
         }
 
-        //var elapsed = sw.Elapsed;
-        //Console.WriteLine($"Rewrote db - {itemsRewritten} items in {elapsed.TotalMilliseconds} - FROM {startingLength} TO {endingLength}");
 
     }
 
@@ -137,43 +154,135 @@ internal class TransactionLog<T> : IDisposable where T : class, IEntity
 
     }
 
+    private async Task<long> GetNextLineFeedPosition(Stream stream, byte[] buffer)
+    {
+        long originalPosition = stream.Position;
+        try
+        {
+            int read;
+            do
+            {
+                read = await stream.ReadAsync(buffer);
+
+                for (int i = 0; i < read; i++)
+                {
+                    if (buffer[i] == LF)
+                    {
+                        // position in stream of this LF is the stream position
+                        // minus the bytes read, plus the index of the byte
+                        // E.g. stream is at 10,000 position
+                        // Read 4000 bytes
+                        // index (i) is 2000
+                        // This LF would be at stream position 8000
+
+                        return (stream.Position - read) + i;
+                    }
+                }
+
+            } while (read > 0);
+
+            return -1;
+        }
+        finally
+        {
+            stream.Position = originalPosition;
+        }
+
+    }
+
     public async IAsyncEnumerable<T> LoadRecords([EnumeratorCancellation] CancellationToken cancellationToken)
     {
 
         if (outputStream.Length == 0)
         {
+            this.header = new StoreHeader { CompressedEntities = null, Creation = DateTimeOffset.Now, LastRewrite = null };
             yield break;
         }
 
         var leaveOpen = !options.ReadOnly;
 
-        using var sr = new StreamReader(outputStream, Encoding.UTF8, leaveOpen: leaveOpen);
+        
+        byte[] findNewLineBuffer = new byte[4096];
+        var lineView = new ViewStream();
 
-        while (!cancellationToken.IsCancellationRequested)
+        if (outputStream.Length > 0)
         {
-            var line = await sr.ReadLineAsync(cancellationToken);
-            if (line == null)
-            {
-                yield break;
-            }
-            if (line.Length > 0)
-            {
-                T entity = null;
-                try
-                {
-                    entity = JsonSerializer.Deserialize<T>(line, jsonTypeInfo);
-                }
-                catch (JsonException)
-                {
-                }
+            var firstLinePosition = await GetNextLineFeedPosition(outputStream, findNewLineBuffer);
+            lineView.SetStream(outputStream, 0, firstLinePosition);
 
-                if (entity != null)
+            this.header = await JsonSerializer.DeserializeAsync(lineView, InternalSerializationContext.Default.StoreHeader, cancellationToken);
+            if (header.CompressedEntities != null)
+            {
+                await foreach (var segment in header.CompressedEntities)
                 {
-                    yield return entity;
+                    using var compressedMemory = new MemoryStream(segment);
+                    using var deflate = new BrotliStream(compressedMemory, CompressionMode.Decompress, false);
+                    using var entityMemory = new MemoryStream();
+                    deflate.CopyTo(entityMemory);
+                    entityMemory.Position = 0;
+
+                    await foreach(var entity in ReadEntitiesFromStream(entityMemory, findNewLineBuffer, cancellationToken))
+                    {
+                        yield return entity;
+                    }
+
                 }
             }
+
         }
 
+        await foreach(var entity in ReadEntitiesFromStream(outputStream, findNewLineBuffer, cancellationToken))
+        {
+            yield return entity;
+        }
+
+
+    }
+
+    private async IAsyncEnumerable<T> ReadEntitiesFromStream(Stream stream, byte[] findNewLineBuffer, [EnumeratorCancellation] CancellationToken cancellationToken)
+    {
+        using var viewStream = new ViewStream();
+
+        while(true)
+        {
+            
+            var startPosition = stream.Position;
+
+            if (startPosition == stream.Length)
+            {
+                break;
+            }
+
+            var nextLineFeedPosition = await GetNextLineFeedPosition(stream, findNewLineBuffer);
+
+            if (nextLineFeedPosition == -1)
+            {
+                nextLineFeedPosition = stream.Length;
+            }
+
+            if (nextLineFeedPosition == startPosition)
+            {
+                stream.ReadByte();
+                continue;
+            }
+
+            viewStream.SetStream(stream, startPosition, (nextLineFeedPosition - startPosition) + 1);
+
+            T entity = null;
+            try
+            {
+                entity = await JsonSerializer.DeserializeAsync<T>(viewStream, jsonTypeInfo, cancellationToken);
+            }
+            catch(Exception ex)
+            {
+                ;
+            }
+            if (entity != null) 
+            {
+                yield return entity;
+            }
+
+        }
     }
 
     public void Dispose()
@@ -193,6 +302,33 @@ internal class TransactionLog<T> : IDisposable where T : class, IEntity
             }
             outputStream?.Dispose();
             outputStream = null;
+        }
+
+        if (rewriteStream != null)
+        {
+            this.rewriteTask.Wait();
+            FileStream streamToCleanup = null;
+            if (rewriteStream is FileStream rewriteFileStream)
+            {
+                streamToCleanup = rewriteFileStream;
+            }
+            if (rewriteStream is BrotliStream brotliStream &&
+                brotliStream.BaseStream is FileStream baseFileStream)
+            {
+                streamToCleanup = baseFileStream;
+            }
+            if (streamToCleanup != null)
+            {
+                streamToCleanup.Close();
+                try
+                {
+                    File.Delete(streamToCleanup.Name);
+                }
+                catch(Exception)
+                {
+                }
+            }
+
         }
     }
 
@@ -219,39 +355,38 @@ internal class TransactionLog<T> : IDisposable where T : class, IEntity
         lock (writeLock)
         {
             var startingPosition = outputStream.Position;
-            bool writeLF = false;
-            if (startingPosition > 0)
+
+            // If the file is blank, dump a header value
+            if (startingPosition == 0)
             {
-                writeLF = true;
+                JsonSerializer.Serialize(outputStream, this.header, InternalSerializationContext.Default.StoreHeader);
                 outputStream.WriteByte(LF);
             }
+
             JsonSerializer.Serialize(outputStream, entity, jsonTypeInfo);
+            outputStream.WriteByte(LF);
+
             var written = outputStream.Position - startingPosition;
             unflushed += (int)written;
 
-            if (rewriteTailBuffer != null)
+            // Check if we need to start rewriting
+            if (rewriteTailBuffer == null)
             {
-                if (writeLF) rewriteTailBuffer.WriteByte(LF);
-                JsonSerializer.Serialize(rewriteTailBuffer, entity, jsonTypeInfo);
-            }
-            else
-            {
-            
                 var ratio = memoryStore.DeadEntityCount / memoryStore.EntityCount;
                 if (ratio > options.RewriteRatio && memoryStore.EntityCount > options.RewriteMinimum)
                 {
                     rewriteTailBuffer = new MemoryStream();
                     rewriteStream = rewriteStreamFactory();
 
-                    // These could be written to the tail buffer instead
-                    // Putting them into the rewrite stream means they are out
-                    // of order with when the transaction was done, but shouldn't matter
-                    if (writeLF) rewriteTailBuffer.WriteByte(LF);
-                    JsonSerializer.Serialize(rewriteTailBuffer, entity, jsonTypeInfo);
-
                     memoryStore.ResetDeadSpace();
                     rewriteTask = Task.Run(Rewrite);
                 }
+            }
+
+            if (rewriteTailBuffer != null)
+            {
+                JsonSerializer.Serialize(rewriteTailBuffer, entity, jsonTypeInfo);
+                rewriteTailBuffer.WriteByte(LF);
             }
 
         }
@@ -282,6 +417,51 @@ internal class TransactionLog<T> : IDisposable where T : class, IEntity
             }
         }
         return rewriteTask;
+    }
+
+    private async IAsyncEnumerable<byte[]> GetCompressedRewriteSegments(T[] entities, [EnumeratorCancellation] CancellationToken cancellationToken)
+    {
+        Stopwatch sw = Stopwatch.StartNew();
+        using var serializeStream = new MemoryStream();
+
+        var compressedBackingStream = new MemoryStream();
+        var brotliStream = new BrotliStream(compressedBackingStream, CompressionLevel.Optimal);
+
+        for(int i = 0; i < entities.Length; i++)
+        {
+            
+            await JsonSerializer.SerializeAsync<T>(serializeStream, entities[i], jsonTypeInfo, cancellationToken);
+            serializeStream.WriteByte(LF);
+
+            // half of the large object heap size
+            if (serializeStream.Position > 42_500) 
+            {
+                serializeStream.SetLength(serializeStream.Position);
+                serializeStream.Position = 0;
+                await serializeStream.CopyToAsync(brotliStream, cancellationToken);
+                serializeStream.Position = 0;
+                await brotliStream.FlushAsync(cancellationToken);
+                yield return compressedBackingStream.ToArray();
+
+                brotliStream.Dispose();
+
+                compressedBackingStream = new MemoryStream();
+                brotliStream = new BrotliStream(compressedBackingStream, CompressionLevel.Optimal);
+            }
+        }
+
+        if (serializeStream.Position > 0)
+        {
+            serializeStream.SetLength(serializeStream.Position);
+            serializeStream.Position = 0;
+            await serializeStream.CopyToAsync(brotliStream, cancellationToken);
+            await brotliStream.FlushAsync(cancellationToken);
+            yield return compressedBackingStream.ToArray();
+        }
+
+        brotliStream.Dispose();
+
+        Console.WriteLine("Rewrite compression took: " + sw.ElapsedMilliseconds + "ms");
     }
 
     public Task RewriteTask => rewriteTask;

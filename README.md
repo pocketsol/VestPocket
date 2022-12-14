@@ -119,7 +119,18 @@ Changes to multiple entities can be saved at the same time. If any entity has an
 The store should be closed before the application shuts down whenever possible. This will allow any ongoing file rewrite to complete and a graceful shutdown of transactions that are currently being processed. The cancellation token can be passed to control if the close method should cancel any shutdown activities (such as waiting for a rewrite to finish). As of v0.1.0, this has not yet been implemented.  
 
 # File Format
-The file format is trivial. After a transaction is accepted, each entity in the transaction is serialized using System.Text.Json to a single line of text. The file store is an append only file, and old versions of entities are left in the file.
+The file format is simple and meant to be easy to read for developers familiar with JSON.
+
+## Header
+Each file starts with a header row of JSON which contains some metadata about the file, such as when it was created, the last time it was rewritten, and any entities that were compressed on the last file rewrite.
+
+```json
+{"Creation":"2022-12-14T17:38:24.1766817-05:00","LastRewrite":"2022-12-14T17:38:39.1187185-05:00","CompressedEntities":[...]}
+```
+
+## Entities
+
+After a transaction is accepted, each entity in the transaction is serialized using System.Text.Json to a single line of text. The file store is an append only file, and old versions of entities are left in the file.
 
  ```json
 {"$type":"Entity","Key":"3-0","Version":1,"Deleted":false,"Body":"Just some body text 3-0"}
@@ -129,6 +140,8 @@ The file format is trivial. After a transaction is accepted, each entity in the 
 ```
 
 JSON is not a particularly compact format. It was chosen for this project for two reasons, it is relatively easy to read (and merge or diagnose) and because using System.Text.Json means that AOT friendly source generation can be utilized.
+
+If the entities stored in the file do not need to be easy to read for what you plan to use the store for, then it is recommended to enable the option to compress entities on rewrite.
 
 # Rewriting
 Because entities are stored in a single append-only file, periodically it needs maintenance to avoid the file growing too large. When certain criteria are met (typically when more dead entities than alive ones are in the file), Vest Pocket will undertake a file rewrite.

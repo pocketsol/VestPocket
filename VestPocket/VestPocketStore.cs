@@ -1,5 +1,6 @@
 ﻿using System.IO;
 using System.Text.Json.Serialization.Metadata;
+using System.IO.Compression;
 
 namespace VestPocket;
 
@@ -53,7 +54,6 @@ public class VestPocketStore<TEntity> : IDisposable where TEntity : class, IEnti
 
         if (options.FilePath == null)
         {
-            this.directory = Path.GetDirectoryName(options.FilePath);
 
             var memoryStream = new MemoryStream();
             transactionStore = new TransactionLog<TEntity>(
@@ -67,6 +67,7 @@ public class VestPocketStore<TEntity> : IDisposable where TEntity : class, IEnti
         }
         else
         {
+            this.directory = Path.GetDirectoryName(options.FilePath);
 
             var fileAccess = options.ReadOnly ? FileAccess.Read : FileAccess.ReadWrite;
             var fileShare = options.ReadOnly ? FileShare.ReadWrite : FileShare.None;
@@ -214,19 +215,19 @@ public class VestPocketStore<TEntity> : IDisposable where TEntity : class, IEnti
         }
     }
 
-    private static Stream SwapFileRewriteStream(Stream outputStream, Stream rewriteStream)
+    private Stream SwapFileRewriteStream(Stream outputStream, Stream rewriteStream)
     {
-        var rewriteFileStream = (FileStream)rewriteStream;
-        var outputFileStream = (FileStream)outputStream;
 
-        var databaseFilePath = outputFileStream.Name;
-        var rewriteFilePath = rewriteFileStream.Name;
+        string rewriteFilePath;
+
+        var rewriteFileStream = (FileStream)rewriteStream;
+        rewriteFilePath = rewriteFileStream.Name;
 
         rewriteFileStream.Close();
-        outputFileStream.Close();
+        outputStream.Close();
 
-        File.Move(rewriteFilePath, databaseFilePath, true);
-        var newOutputStream = new FileStream(databaseFilePath, FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None, 65536);
+        File.Move(rewriteFilePath, options.FilePath, true);
+        var newOutputStream = new FileStream(options.FilePath, FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None, 65536);
         newOutputStream.Position = newOutputStream.Length;
         return newOutputStream;
     }
@@ -235,7 +236,18 @@ public class VestPocketStore<TEntity> : IDisposable where TEntity : class, IEnti
     {
         var fileName = Guid.NewGuid().ToString() + ".tmp";
         var filePath = Path.Combine(this.directory, fileName);
-        return new FileStream(filePath, FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None, 65536);
+        var fs = new FileStream(filePath, FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None, 65536);
+        return fs;
+        //if (options.CompressOnRewrite)
+        //{
+        //    var compressStream = new BrotliStream(fs, CompressionLevel.Fastest);
+        //    return compressStream;
+        //}
+        //else
+        //{
+        //    return fs;
+        //}
+    
     }
 
     private static Stream SwapMemoryRewriteStream(Stream outputStream, Stream rewriteStream)

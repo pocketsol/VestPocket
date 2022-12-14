@@ -23,20 +23,27 @@ namespace VestPocket.ConsoleTest
         {
             RemoveDatabaseFiles();
 
+            int threads = 100;
+            int iterations = 1000;
+
             Console.WriteLine("---------Running VestPocket---------");
-            connection = new VestPocketStore<Entity>(SourceGenerationContext.Default.Entity, VestPocketOptions.Default);
+
+            var options = new VestPocketOptions();
+            options.CompressOnRewrite = true;
+
+            connection = new VestPocketStore<Entity>(SourceGenerationContext.Default.Entity, options);
             await connection.OpenAsync(CancellationToken.None);
 
             await TimeIterations("Save Entities", async (thread, i) =>
             {
                 await connection.Save(new Entity($"{thread}-{i}", 0, false, $"""Just some body text {thread}-{i}"""));
-            }, 100, 100);
+            }, threads, iterations);
 
             await TimeIterations("Read Entities", (thread, i) =>
             {
                 connection.Get<Entity>($"{thread}-{i}");
                 return Task.CompletedTask;
-            }, 100, 100);
+            }, threads, iterations);
 
             await TimeIterations("Prefix Search", (thread, i) =>
             {
@@ -49,7 +56,7 @@ namespace VestPocket.ConsoleTest
                     }
                 }
                 return Task.CompletedTask;
-            }, 100, 100);
+            }, threads, iterations);
 
             await TimeIterations("Read and Write Mix", async (thread, i) =>
             {
@@ -60,8 +67,9 @@ namespace VestPocket.ConsoleTest
                 entity = await connection.Save(entity);
                 entity = connection.Get<Entity>($"{thread}-{i}");
                 entity = connection.Get<Entity>($"{thread}-{i}");
-            }, 100, 100);
+            }, threads, iterations);
 
+            await connection.ForceMaintenance();
             await connection.Close(CancellationToken.None);
             connection.Dispose();
             Console.WriteLine();
@@ -88,7 +96,7 @@ namespace VestPocket.ConsoleTest
                     }
                 }
                 return Task.CompletedTask;
-            }, 100, 100);
+            }, threads, iterations);
             readOnlyConnection.Close(CancellationToken.None).Wait();
             readOnlyConnection.Dispose();
 
@@ -102,14 +110,14 @@ namespace VestPocket.ConsoleTest
                 var entity = new Entity($"{thread}-{i}", 0, false, $"""Just some body text {thread}-{i}""");
                 dictionary.AddOrUpdate(entity.Key, entity, (k, e) => e);
                 return Task.CompletedTask;
-            }, 100, 100);
+            }, threads, iterations);
 
             await TimeIterations("ConcurrentDictionary Read Entities", (thread, i) =>
             {
                 var key = $"{thread}-{i}";
                 dictionary.TryGetValue(key, out var entity);
                 return Task.CompletedTask;
-            }, 100, 100);
+            }, threads, iterations);
 
             await TimeIterations("ConcurrentDictionary Read and Write Mix", (thread, i) =>
             {
@@ -124,7 +132,7 @@ namespace VestPocket.ConsoleTest
                     dictionary.TryGetValue(key, out entity);
                 }
                 return Task.CompletedTask;
-            }, 100, 100);
+            }, threads, iterations);
             Console.WriteLine();
 
             Console.WriteLine("----------Running LiteDb-------------");
@@ -139,14 +147,14 @@ namespace VestPocket.ConsoleTest
                     string body = $"""Just some body text {thread}-{i}""";
                     col.Insert(new LiteDbEntity { Key = key, Body = body });
                     return Task.CompletedTask;
-                }, 100, 100);
+                }, threads, iterations);
 
                 await TimeIterations("LiteDb Read Entities", (thread, i) =>
                 {
                     string key = $"{thread}-{i}";
                     col.FindOne(x => x.Key == key);
                     return Task.CompletedTask;
-                }, 100, 100);
+                }, threads, iterations);
 
                 await TimeIterations("LiteDb Get Entities", (thread, i) =>
                 {
@@ -160,7 +168,7 @@ namespace VestPocket.ConsoleTest
                         }
                     }
                     return Task.CompletedTask;
-                }, 100, 100);
+                }, threads, iterations);
 
                 await TimeIterations("LiteDb Read and Write Mix", (thread, i) =>
                 {
@@ -173,7 +181,7 @@ namespace VestPocket.ConsoleTest
                     entity = col.FindOne(x => x.Key == key);
                     entity = col.FindOne(x => x.Key == key);
                     return Task.CompletedTask;
-                }, 100, 100);
+                }, threads, iterations);
 
             }
 
