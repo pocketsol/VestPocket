@@ -1,6 +1,4 @@
-﻿using System.Text;
-
-namespace VestPocket;
+﻿namespace VestPocket;
 
 /// <summary>
 /// A light transactional wrapper around storing entities in memory.
@@ -57,16 +55,12 @@ internal class EntityStore<T> where T : class, IEntity
     /// <param name="prefix">The prefix that will be used to search for matches.</param>
     /// <param name="sortResults">If the results will be sorted by key when returned.</param>
     /// <returns></returns>
-    public TSelection[] GetByPrefix<TSelection>(string prefix, bool sortResults) where TSelection : class, T
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public PrefixResult<TSelection> GetByPrefix<TSelection>(string prefix) where TSelection : class, T
     {
-        if (sortResults)
-        {
-            return lookup.GetByPrefix<TSelection>(prefix).OrderBy(x => x.Key).ToArray();
-        }
-        else
-        {
-            return lookup.GetByPrefix<TSelection>(prefix);
-        }
+        
+        return lookup.GetByPrefix<TSelection>(prefix);
+
     }
 
     /// <summary>

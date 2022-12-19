@@ -60,8 +60,8 @@ namespace VestPocket.Benchmark
         [Benchmark]
         public void GetKeyPrefix()
         {
-            var results = store.GetByPrefix<Entity>("12345", false);
-            foreach (var result in results)
+            using var prefixSerach = store.GetByPrefix<Entity>("1234");
+            foreach (var result in prefixSerach.Results)
             {
                 if (result.Key == null)
                 {

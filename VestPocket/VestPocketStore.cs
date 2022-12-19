@@ -1,6 +1,5 @@
 ﻿using System.IO;
 using System.Text.Json.Serialization.Metadata;
-using System.IO.Compression;
 
 namespace VestPocket;
 
@@ -74,7 +73,7 @@ public class VestPocketStore<TEntity> : IDisposable where TEntity : class, IEnti
             var fileAccess = options.ReadOnly ? FileAccess.Read : FileAccess.ReadWrite;
             var fileShare = options.ReadOnly ? FileShare.ReadWrite : FileShare.None;
 
-            var file = new FileStream(options.FilePath, FileMode.OpenOrCreate, fileAccess, fileShare, 65536);
+            var file = new FileStream(options.FilePath, FileMode.OpenOrCreate, fileAccess, fileShare, 4096);
 
             transactionStore = new TransactionLog<TEntity>(
                 file,
@@ -144,9 +143,9 @@ public class VestPocketStore<TEntity> : IDisposable where TEntity : class, IEnti
         return memoryStore.Get(key) as T;
     }
 
-    public T[] GetByPrefix<T>(string prefix, bool sortResults) where T : class, TEntity
+    public PrefixResult<T> GetByPrefix<T>(string prefix) where T : class, TEntity
     {
-        return memoryStore.GetByPrefix<T>(prefix, sortResults);
+        return memoryStore.GetByPrefix<T>(prefix);
     }
 
     public void Dispose()
@@ -231,7 +230,7 @@ public class VestPocketStore<TEntity> : IDisposable where TEntity : class, IEnti
         outputStream.Close();
 
         File.Move(rewriteFilePath, options.FilePath, true);
-        var newOutputStream = new FileStream(options.FilePath, FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None, 65536);
+        var newOutputStream = new FileStream(options.FilePath, FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None, 4096);
         newOutputStream.Position = newOutputStream.Length;
         return newOutputStream;
     }
@@ -240,17 +239,8 @@ public class VestPocketStore<TEntity> : IDisposable where TEntity : class, IEnti
     {
         var fileName = Guid.NewGuid().ToString() + ".tmp";
         var filePath = Path.Combine(this.directory, fileName);
-        var fs = new FileStream(filePath, FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None, 65536);
+        var fs = new FileStream(filePath, FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None, 4096);
         return fs;
-        //if (options.CompressOnRewrite)
-        //{
-        //    var compressStream = new BrotliStream(fs, CompressionLevel.Fastest);
-        //    return compressStream;
-        //}
-        //else
-        //{
-        //    return fs;
-        //}
     
     }
 

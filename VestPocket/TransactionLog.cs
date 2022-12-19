@@ -4,6 +4,7 @@ using System.Runtime.CompilerServices;
 using System.Text.Json;
 using System.Text.Json.Serialization.Metadata;
 using System.IO.Compression;
+using System.Buffers;
 
 namespace VestPocket;
 
@@ -51,12 +52,9 @@ internal class TransactionLog<T> : IDisposable where T : class, IEntity
 
     private async Task Rewrite()
     {
-        
-        var startingLength = outputStream.Length;
-
         var itemsRewritten = 0;
 
-        var allItems = memoryStore.GetByPrefix<T>("", false);
+        using var allItems = memoryStore.GetByPrefix<T>(string.Empty);
         
         Stream stream = rewriteStream;
         if (isDisposing) { return; }
@@ -81,15 +79,15 @@ internal class TransactionLog<T> : IDisposable where T : class, IEntity
             CancellationToken.None
         );
 
-        rewriteStream.WriteByte(LF);
+        rewriteStream.Write(LF, 0, 1);
 
         if (!options.CompressOnRewrite)
         {
-            foreach (var item in allItems)
+            foreach (var item in allItems.Results)
             {
                 if (isDisposing) return;
                 JsonSerializer.Serialize(stream, item, jsonTypeInfo);
-                stream.WriteByte(LF);
+                stream.Write(LF, 0, 1);
                 itemsRewritten++;
             }
         }
@@ -165,7 +163,7 @@ internal class TransactionLog<T> : IDisposable where T : class, IEntity
 
                 for (int i = 0; i < read; i++)
                 {
-                    if (buffer[i] == LF)
+                    if (buffer[i] == LF_Byte)
                     {
                         // position in stream of this LF is the stream position
                         // minus the bytes read, plus the index of the byte
@@ -270,7 +268,7 @@ internal class TransactionLog<T> : IDisposable where T : class, IEntity
             T entity = null;
             try
             {
-                entity = await JsonSerializer.DeserializeAsync<T>(viewStream, jsonTypeInfo, cancellationToken);
+                entity = await JsonSerializer.DeserializeAsync(viewStream, jsonTypeInfo, cancellationToken);
             }
             catch(Exception)
             {
@@ -348,7 +346,8 @@ internal class TransactionLog<T> : IDisposable where T : class, IEntity
         return bytesWritten;
     }
 
-    private const byte LF = 10;
+    private readonly byte[] LF = new byte[] { 10 };
+    private const byte LF_Byte = 10;
 
     private long WriteDocumentChange(T entity)
     {
@@ -363,11 +362,11 @@ internal class TransactionLog<T> : IDisposable where T : class, IEntity
             if (startingPosition == 0)
             {
                 JsonSerializer.Serialize(outputStream, this.header, InternalSerializationContext.Default.StoreHeader);
-                outputStream.WriteByte(LF);
+                outputStream.Write(LF, 0, 1);
             }
 
             JsonSerializer.Serialize(outputStream, entity, jsonTypeInfo);
-            outputStream.WriteByte(LF);
+            outputStream.Write(LF, 0, 1);
 
             var written = outputStream.Position - startingPosition;
             unflushed += (int)written;
@@ -389,7 +388,7 @@ internal class TransactionLog<T> : IDisposable where T : class, IEntity
             if (rewriteTailBuffer != null)
             {
                 JsonSerializer.Serialize(rewriteTailBuffer, entity, jsonTypeInfo);
-                rewriteTailBuffer.WriteByte(LF);
+                outputStream.Write(LF, 0, 1);
             }
 
             endingPosition = outputStream.Position;
@@ -425,7 +424,7 @@ internal class TransactionLog<T> : IDisposable where T : class, IEntity
         return rewriteTask;
     }
 
-    private async IAsyncEnumerable<byte[]> GetCompressedRewriteSegments(T[] entities, [EnumeratorCancellation] CancellationToken cancellationToken)
+    private async IAsyncEnumerable<byte[]> GetCompressedRewriteSegments(PrefixResult<T> entities, [EnumeratorCancellation] CancellationToken cancellationToken)
     {
         Stopwatch sw = Stopwatch.StartNew();
         using var serializeStream = new MemoryStream();
@@ -433,11 +432,11 @@ internal class TransactionLog<T> : IDisposable where T : class, IEntity
         var compressedBackingStream = new MemoryStream();
         var brotliStream = new BrotliStream(compressedBackingStream, CompressionLevel.Optimal);
 
-        for(int i = 0; i < entities.Length; i++)
+        foreach(var entity in entities.Results) 
         {
             
-            await JsonSerializer.SerializeAsync<T>(serializeStream, entities[i], jsonTypeInfo, cancellationToken);
-            serializeStream.WriteByte(LF);
+            await JsonSerializer.SerializeAsync<T>(serializeStream, entity, jsonTypeInfo, cancellationToken);
+            serializeStream.Write(LF, 0, 1);
 
             // half of the large object heap size
             if (serializeStream.Position > 42_500) 

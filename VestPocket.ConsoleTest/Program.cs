@@ -47,8 +47,8 @@ namespace VestPocket.ConsoleTest
 
             await TimeIterations("Prefix Search", (thread, i) =>
             {
-                var results = connection.GetByPrefix<Entity>(thread.ToString() + "-12", false);
-                foreach (var result in results)
+                using var prefixSearch = connection.GetByPrefix<Entity>(thread.ToString() + "-");
+                foreach (var result in prefixSearch.Results)
                 {
                     if (result == null)
                     {
@@ -92,12 +92,12 @@ namespace VestPocket.ConsoleTest
             {
                 readOnlyConnection.Get<Entity>($"{thread}-{i}");
                 return Task.CompletedTask;
-            }, 100, 100);
+            }, threads, iterations);
 
             await TimeIterations("Prefix Search", (thread, i) =>
             {
-                var results = readOnlyConnection.GetByPrefix<Entity>(thread.ToString() + "-123", false);
-                foreach (var result in results)
+                using var prefixSearch = readOnlyConnection.GetByPrefix<Entity>(thread.ToString() + "-");
+                foreach (var result in prefixSearch.Results)
                 {
                     if (result == null)
                     {

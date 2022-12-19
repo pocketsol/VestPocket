@@ -87,8 +87,8 @@ namespace VestPocket.Test
             string prefix = "pre";
             string body = "body";
             var expectedDocument = await testStore.Save(new TestDocument(key, 0, false, body));
-            var prefixResults = testStore.GetByPrefix<TestDocument>(prefix, false);
-            var firstMatchByPrefix = prefixResults.FirstOrDefault();
+            var prefixResults = testStore.GetByPrefix<TestDocument>(prefix);
+            var firstMatchByPrefix = prefixResults.Results.FirstOrDefault();
             Assert.Equal(expectedDocument, firstMatchByPrefix);
         }
 
@@ -100,31 +100,11 @@ namespace VestPocket.Test
             string body = "body";
 
             var expectedDocument = await testStore.Save(new TestDocument(key, 0, false, body));
-            var prefixResults = testStore.GetByPrefix<TestDocument>(prefix, false);
-            var firstMatchByPrefix = prefixResults.FirstOrDefault();
+            var prefixResults = testStore.GetByPrefix<TestDocument>(prefix);
+            var firstMatchByPrefix = prefixResults.Results.FirstOrDefault();
             Assert.Equal(expectedDocument, firstMatchByPrefix);
         }
 
-        [Fact]
-        public async Task PrefixSearch_CanSortResults()
-        {
-            string aKey = "AKey";
-            string bKey = "BKey";
-            string cKey = "CKey";
-
-            string body = "body";
-
-            var cDoc = await testStore.Save(new TestDocument(cKey, 0, false, body));
-            var bDoc = await testStore.Save(new TestDocument(bKey, 0, false, body));
-            var aDoc = await testStore.Save(new TestDocument(aKey, 0, false, body));
-
-            var prefixResults = testStore.GetByPrefix<TestDocument>("", true).ToArray();
-
-            Assert.Equal(3, prefixResults.Length);
-            Assert.Equal(aDoc, prefixResults[0]);
-            Assert.Equal(bDoc, prefixResults[1]);
-            Assert.Equal(cDoc, prefixResults[2]);
-        }
 
         [Fact]
         public async Task KeysAreCaseSensitive()

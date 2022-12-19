@@ -100,14 +100,6 @@ internal class Node<T> where T : class, IEntity
         Children[^1] = newChild;
     }
 
-    //public static byte[] GetKeySegment(byte[] key, int startingCharacter)
-    //{
-    //    var remainingLength = key.Length - startingCharacter;
-    //    var keySegment = new byte[remainingLength];
-    //    Array.Copy(key, startingCharacter, keySegment, 0, remainingLength);
-    //    return keySegment;
-    //}
-
     public void SplitKeySegmentAtLength(int startingCharacter)
     {
         // Create new split child
@@ -174,29 +166,61 @@ internal class Node<T> where T : class, IEntity
         return null;
     }
 
-    public IEnumerable<TSelection> GetValuesByPrefix<TSelection>(ReadOnlyMemory<char> key) where TSelection : class, T
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public void GetValuesByPrefix<TSelection>(ReadOnlySpan<char> key, PrefixResult<TSelection> result) where TSelection : class, T
     {
         if (Children != null)
         {
             foreach (var child in Children)
             {
-                var matchingBytes = GetMatchingCharacters(key, child.KeySegment);
+                var matchingBytes = key.CommonPrefixLength(child.KeySegment);
                 if (matchingBytes > 0)
                 {
                     if (matchingBytes == key.Length)
                     {
                         // We found a key that matched the entire prefix,
                         // either exactly or at least to the length of the search key
-                        foreach (var subResult in child.GetAllValuesAtOrBelow<TSelection>())
-                        {
-                            yield return subResult;
-                        }
+                        child.GetAllValuesAtOrBelow(result);
                     }
                     else if (matchingBytes < key.Length)
                     {
-                        foreach (var subResult in child.GetValuesByPrefix<TSelection>(key.Slice(matchingBytes)))
+                        child.GetValuesByPrefix(key.Slice(matchingBytes), result);
+                    }
+                }
+            }
+        }
+    }
+
+    public void GetAllValuesAtOrBelow<TSelection>(PrefixResult<TSelection> result) where TSelection : class, T
+    {
+        if (Value != null)
+        {
+            result.Add((TSelection)this.Value);
+        }
+        if (Children != null)
+        {
+            // Yes this looks stupid, but it performed about 10% better than a simple recursion.
+            foreach (var child in Children)
+            {
+                if (child.Value != null) { result.Add((TSelection)child.Value); }
+                if (child.Children != null)
+                {
+                    foreach (var subChild1 in child.Children)
+                    {
+                        if (subChild1.Value != null) { result.Add((TSelection)subChild1.Value); }
+                        if (subChild1.Children != null)
                         {
-                            yield return subResult;
+                            foreach (var subChild2 in subChild1.Children)
+                            {
+                                if (subChild2.Value != null) { result.Add((TSelection)subChild2.Value); }
+                                if (subChild2.Children != null)
+                                {
+                                    foreach (var subChild3 in subChild2.Children)
+                                    {
+                                        subChild3.GetAllValuesAtOrBelow(result);
+                                    }
+                                }
+                            }
                         }
                     }
                 }
@@ -204,23 +228,20 @@ internal class Node<T> where T : class, IEntity
         }
     }
 
-    public IEnumerable<TSelection> GetAllValuesAtOrBelow<TSelection>() where TSelection : class, T
-    {
-        if (Value != null)
-        {
-            yield return (TSelection)this.Value;
-        }
-        if (Children != null)
-        {
-            foreach (var child in Children)
-            {
-                foreach(var subResult in child.GetAllValuesAtOrBelow<TSelection>())
-                {
-                    yield return subResult;
-                }
-            }
-        }
-    }
+    //public void GetAllValuesAtOrBelow<TSelection>(PrefixResult<TSelection> result) where TSelection : class, T
+    //{
+    //    if (Value != null)
+    //    {
+    //        result.Add((TSelection)this.Value);
+    //    }
+    //    if (Children != null)
+    //    {
+    //        foreach (var child in Children)
+    //        {
+    //            child.GetAllValuesAtOrBelow(result);
+    //        }
+    //    }
+    //}
 
     /// <summary>
     /// Looks for a child node that has a key segment that matches part of the prefix of a given key segment
@@ -292,32 +313,6 @@ internal class Node<T> where T : class, IEntity
             return true;
         }
         return false;
-    }
-
-
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public static int GetMatchingCharacters(ReadOnlyMemory<char> key, string keySegmentToMatch)
-    {
-        return key.Span.CommonPrefixLength(keySegmentToMatch);
-        //if (key.Length >= keySegmentToMatch.Length)
-        //{
-        //    keySpan = key.Span.Slice(0, keySegmentToMatch.Length);
-        //}
-        //else
-        //{
-        //    keySpan = key.Span;
-        //}
-
-        ////var bytesToCheck = Math.Min(key.Length, keySegmentToMatch.Length);
-        ////var keySpan = key.Span;
-        //for (int i = 0; i < keySpan.Length; i++)
-        //{
-        //    if (keySpan[i] != keySegmentToMatch[i])
-        //    {
-        //        return i;
-        //    }
-        //}
-        //return keySpan.Length;
     }
 
     public int GetChildrenCount()

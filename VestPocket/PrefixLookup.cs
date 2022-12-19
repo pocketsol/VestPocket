@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Buffers;
 using System.Collections.Generic;
 using System.Linq;
 using System.Runtime.CompilerServices;
@@ -129,19 +130,22 @@ internal class PrefixLookup<T> where T : class, IEntity
         }
     }
 
-    public TSelection[] GetByPrefix<TSelection>(string keyPrefix) where TSelection : class, T
+    public PrefixResult<TSelection> GetByPrefix<TSelection>(string keyPrefix) where TSelection : class, T
     {
+
+        PrefixResult<TSelection> result = new(keyPrefix);
 
         if (!synchronized || lockSlim.IsWriteLockHeld)
         {
             if (keyPrefix == string.Empty)
             {
-                return root.GetAllValuesAtOrBelow<TSelection>().ToArray();
+                root.GetAllValuesAtOrBelow(result);
             }
             else
             {
-                return root.GetValuesByPrefix<TSelection>(keyPrefix.AsMemory()).ToArray();
+                root.GetValuesByPrefix(keyPrefix, result);
             }
+            return result;
         }
 
         lockSlim.EnterReadLock();
@@ -149,12 +153,13 @@ internal class PrefixLookup<T> where T : class, IEntity
         {
             if (keyPrefix == string.Empty)
             {
-                return root.GetAllValuesAtOrBelow<TSelection>().ToArray();
+                root.GetAllValuesAtOrBelow(result);
             }
             else
             {
-                return root.GetValuesByPrefix<TSelection>(keyPrefix.AsMemory()).ToArray();
+                root.GetValuesByPrefix(keyPrefix, result);
             }
+            return result;
         }
         finally
         {
