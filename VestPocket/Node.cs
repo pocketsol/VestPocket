@@ -13,24 +13,26 @@ namespace VestPocket;
 internal class Node<T> where T : class, IEntity
 {
     public Node<T> Parent = null;
-    public byte[] KeySegment;
+
+    public string KeySegment;
 
     public Node<T>[] Children;
     public T Value;
 
+    private static readonly byte[] EmptyKeyBytes = new byte[] { }; 
 
     public Node()
     {
-        this.KeySegment = GetKeyBytes("");
+        this.KeySegment = String.Empty;
     }
 
-    public Node(Node<T> parent, byte[] label)
+    public Node(Node<T> parent, string label)
     {
         this.Parent = parent;
         this.KeySegment = label;
     }
 
-    public void SetValue(Span<byte> key, T value)
+    public void SetValue(ReadOnlySpan<char> key, T value)
     {
 
         // Set on a child
@@ -76,7 +78,7 @@ internal class Node<T> where T : class, IEntity
         {
             // There were no matching children. 
             // E.g. Key = "apple" and no child that even starts with 'a'. Add a new child node
-            var keySegment = GetKeySegment(key.ToArray(), 0);
+            string keySegment = new string( key.Slice(0));
             var newChild = new Node<T>(this, keySegment);
             newChild.Value = value;
 
@@ -98,18 +100,18 @@ internal class Node<T> where T : class, IEntity
         Children[^1] = newChild;
     }
 
-    public static byte[] GetKeySegment(byte[] key, int startingCharacter)
-    {
-        var remainingLength = key.Length - startingCharacter;
-        var keySegment = new byte[remainingLength];
-        Array.Copy(key, startingCharacter, keySegment, 0, remainingLength);
-        return keySegment;
-    }
+    //public static byte[] GetKeySegment(byte[] key, int startingCharacter)
+    //{
+    //    var remainingLength = key.Length - startingCharacter;
+    //    var keySegment = new byte[remainingLength];
+    //    Array.Copy(key, startingCharacter, keySegment, 0, remainingLength);
+    //    return keySegment;
+    //}
 
     public void SplitKeySegmentAtLength(int startingCharacter)
     {
         // Create new split child
-        var newChildKeySegment = GetKeySegment(KeySegment, startingCharacter);
+        var newChildKeySegment = KeySegment.Substring(startingCharacter);
         var newChild = new Node<T>(this, newChildKeySegment) { Value = this.Value };
 
         this.Value = null;
@@ -130,20 +132,19 @@ internal class Node<T> where T : class, IEntity
         }
 
         // Change this nodes segment to portion that wasn't cutoff
-        var newKeySegment = new byte[startingCharacter];
-        Array.Copy(KeySegment, 0, newKeySegment, 0, newKeySegment.Length);
-        KeySegment = newKeySegment;
+        KeySegment = KeySegment.Substring(0, startingCharacter);
 
     }
 
-    public Node<T> GetValue(Span<byte> key)
+    public Node<T> GetValue(ReadOnlySpan<char> key)
     {
         if (Children == null) return null;
         //var remainingKeyLength = key.Length - startingCharacter;
 
         foreach(var child in Children)
         {
-            var matchingBytes = GetMatchingBytes(key, child.KeySegment);
+            var matchingBytes = key.CommonPrefixLength(child.KeySegment);
+            //var matchingBytes = GetMatchingBytes(key, child.KeySegment);
                
             if (matchingBytes > 0)
             {
@@ -173,13 +174,13 @@ internal class Node<T> where T : class, IEntity
         return null;
     }
 
-    public IEnumerable<TSelection> GetValuesByPrefix<TSelection>(Memory<byte> key) where TSelection : class, T
+    public IEnumerable<TSelection> GetValuesByPrefix<TSelection>(ReadOnlyMemory<char> key) where TSelection : class, T
     {
         if (Children != null)
         {
             foreach (var child in Children)
             {
-                var matchingBytes = GetMatchingBytes(key.Span, child.KeySegment);
+                var matchingBytes = GetMatchingCharacters(key, child.KeySegment);
                 if (matchingBytes > 0)
                 {
                     if (matchingBytes == key.Length)
@@ -193,7 +194,7 @@ internal class Node<T> where T : class, IEntity
                     }
                     else if (matchingBytes < key.Length)
                     {
-                        foreach(var subResult in child.GetValuesByPrefix<TSelection>(key.Slice(matchingBytes)))
+                        foreach (var subResult in child.GetValuesByPrefix<TSelection>(key.Slice(matchingBytes)))
                         {
                             yield return subResult;
                         }
@@ -227,13 +228,13 @@ internal class Node<T> where T : class, IEntity
     /// <param name="keySegment"></param>
     /// <param name="result">The matching child node</param>
     /// <returns>The number of matching bytes</returns>
-    private Node<T> FindMatchingChild(Span<byte> keySegment, out int bytesMatching)
+    private Node<T> FindMatchingChild(ReadOnlySpan<char> keySegment, out int bytesMatching)
     {
         if (Children != null)
         {
             foreach(var child in Children)
             {
-                var matchingBytes = GetMatchingBytes(keySegment, child.KeySegment);
+                var matchingBytes = keySegment.CommonPrefixLength(child.KeySegment);
 
                 if (matchingBytes > 0)
                 {
@@ -285,52 +286,38 @@ internal class Node<T> where T : class, IEntity
         if (Children != null && Children.Length == 1)
         {
             var child = Children[0];
-            var mergedKeySegment = new byte[KeySegment.Length + child.KeySegment.Length];
-            Array.Copy(KeySegment, mergedKeySegment, KeySegment.Length);
-            Array.Copy(child.KeySegment, 0, mergedKeySegment, KeySegment.Length, child.KeySegment.Length);
             Value = child.Value;
             Children = child.Children;
-            KeySegment = mergedKeySegment;
+            KeySegment = KeySegment + child.KeySegment;
             return true;
         }
         return false;
     }
 
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public static int GetMatchingBytes(in ReadOnlySpan<byte> key, int keyStartingCharacter, in ReadOnlySpan<byte> keySegmentToMatch)
-    {
-        var keySpan = key.Slice(keyStartingCharacter);
-        var bytesToCheck = Math.Min(keySpan.Length, keySegmentToMatch.Length);
-        for (int i = 0; i < bytesToCheck; i++)
-        {
-            if (keySpan[i] != keySegmentToMatch[i])
-            {
-                return i;
-            }
-        }
-
-        return bytesToCheck;
-
-    }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public static int GetMatchingBytes(ReadOnlySpan<byte> key, ReadOnlySpan<byte> keySegmentToMatch)
+    public static int GetMatchingCharacters(ReadOnlyMemory<char> key, string keySegmentToMatch)
     {
-        var bytesToCheck = Math.Min(key.Length, keySegmentToMatch.Length);
-        for (int i = 0; i < bytesToCheck; i++)
-        {
-            if (key[i] != keySegmentToMatch[i])
-            {
-                return i;
-            }
-        }
-        return bytesToCheck;
-    }
+        return key.Span.CommonPrefixLength(keySegmentToMatch);
+        //if (key.Length >= keySegmentToMatch.Length)
+        //{
+        //    keySpan = key.Span.Slice(0, keySegmentToMatch.Length);
+        //}
+        //else
+        //{
+        //    keySpan = key.Span;
+        //}
 
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public static byte[] GetKeyBytes(string key)
-    {
-        return System.Text.Encoding.UTF8.GetBytes(key);
+        ////var bytesToCheck = Math.Min(key.Length, keySegmentToMatch.Length);
+        ////var keySpan = key.Span;
+        //for (int i = 0; i < keySpan.Length; i++)
+        //{
+        //    if (keySpan[i] != keySegmentToMatch[i])
+        //    {
+        //        return i;
+        //    }
+        //}
+        //return keySpan.Length;
     }
 
     public int GetChildrenCount()

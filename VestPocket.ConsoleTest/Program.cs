@@ -47,7 +47,7 @@ namespace VestPocket.ConsoleTest
 
             await TimeIterations("Prefix Search", (thread, i) =>
             {
-                var results = connection.GetByPrefix<Entity>(thread.ToString() + "-123", false);
+                var results = connection.GetByPrefix<Entity>(thread.ToString() + "-12", false);
                 foreach (var result in results)
                 {
                     if (result == null)
@@ -70,6 +70,15 @@ namespace VestPocket.ConsoleTest
             }, threads, iterations);
 
             await connection.ForceMaintenance();
+            Console.WriteLine("-----Transaction Metrics-------------");
+            Console.WriteLine($"Count: {connection.TransactionMetrics.Count}");
+            Console.WriteLine($"Locking Time: {connection.TransactionMetrics.AverageAquiringWriteLockTime.TotalMicroseconds}us");
+            Console.WriteLine($"Validation Time: {connection.TransactionMetrics.AverageValidationTime.TotalMicroseconds}us");
+            Console.WriteLine($"Serialization Time: {connection.TransactionMetrics.AverageSerializationTime.TotalMicroseconds}us");
+            Console.WriteLine($"Serialized Bytes: {connection.TransactionMetrics.BytesSerialized}");
+
+            Console.WriteLine($"Queue Length: {connection.TransactionMetrics.AverageQueueLength}");
+
             await connection.Close(CancellationToken.None);
             connection.Dispose();
             Console.WriteLine();

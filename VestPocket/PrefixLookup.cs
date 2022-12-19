@@ -27,9 +27,9 @@ namespace VestPocket;
 internal class PrefixLookup<T> where T : class, IEntity
 {
 
-    private Node<T> root;
+    private readonly Node<T> root;
 
-    private ReaderWriterLockSlim lockSlim = new ReaderWriterLockSlim();
+    private readonly ReaderWriterLockSlim lockSlim = new();
     private readonly bool synchronized;
 
     /// <summary>
@@ -38,7 +38,7 @@ internal class PrefixLookup<T> where T : class, IEntity
     /// <param name="synchronized">If read and write access should be syncrhonized behind reader writer locks</param>
     public PrefixLookup(bool synchronized)
     {
-        root = new Node<T>(null, Node<T>.GetKeyBytes(string.Empty));
+        root = new Node<T>();
         this.synchronized = synchronized;
     }
 
@@ -46,11 +46,9 @@ internal class PrefixLookup<T> where T : class, IEntity
 
     public int Count => root.GetValuesCount();
 
-    public void Add(string key, T value)
+    public void Add(ReadOnlySpan<char> keyBytes, T value)
     {
-        Span<byte> keyBytes = Encoding.UTF8.GetBytes(key);
-
-        if (!synchronized || lockSlim.IsWriteLockHeld)
+        if (lockSlim.IsWriteLockHeld)
         {
             root.SetValue(keyBytes, value);
             return;
@@ -89,19 +87,18 @@ internal class PrefixLookup<T> where T : class, IEntity
         }
     }
 
-    public T Get(string key)
+    public T Get(ReadOnlySpan<char> key)
     {
-        Span<byte> keyBytes = Encoding.UTF8.GetBytes(key);
 
         if (!synchronized || lockSlim.IsWriteLockHeld)
         {
-            return root.GetValue(keyBytes)?.Value;
+            return root.GetValue(key)?.Value;
         }
 
         lockSlim.EnterReadLock();
         try
         {
-            return root.GetValue(keyBytes)?.Value;
+            return root.GetValue(key)?.Value;
 
         }
         finally
@@ -112,7 +109,7 @@ internal class PrefixLookup<T> where T : class, IEntity
 
     public void Clear()
     {
-        if (!synchronized || lockSlim.IsWriteLockHeld)
+        if (lockSlim.IsWriteLockHeld)
         {
             this.root.Value = null;
             this.root.Children = null;
@@ -125,29 +122,26 @@ internal class PrefixLookup<T> where T : class, IEntity
             this.root.Value = null;
             this.root.Children = null;
         }
+
         finally
         {
             lockSlim.ExitWriteLock();
         }
     }
 
-    public IEnumerable<TSelection> GetByPrefix<TSelection>(string keyPrefix) where TSelection : class, T
+    public TSelection[] GetByPrefix<TSelection>(string keyPrefix) where TSelection : class, T
     {
-        IEnumerable<TSelection> results;
-
-        Memory<byte> keyPrefixSpan = Encoding.UTF8.GetBytes(keyPrefix);
 
         if (!synchronized || lockSlim.IsWriteLockHeld)
         {
             if (keyPrefix == string.Empty)
             {
-                results = root.GetAllValuesAtOrBelow<TSelection>();
+                return root.GetAllValuesAtOrBelow<TSelection>().ToArray();
             }
             else
             {
-                results = root.GetValuesByPrefix<TSelection>(keyPrefixSpan);
+                return root.GetValuesByPrefix<TSelection>(keyPrefix.AsMemory()).ToArray();
             }
-            return results.ToArray();
         }
 
         lockSlim.EnterReadLock();
@@ -155,13 +149,12 @@ internal class PrefixLookup<T> where T : class, IEntity
         {
             if (keyPrefix == string.Empty)
             {
-                results = root.GetAllValuesAtOrBelow<TSelection>();
+                return root.GetAllValuesAtOrBelow<TSelection>().ToArray();
             }
             else
             {
-                results = root.GetValuesByPrefix<TSelection>(keyPrefixSpan);
+                return root.GetValuesByPrefix<TSelection>(keyPrefix.AsMemory()).ToArray();
             }
-            return results.ToArray();
         }
         finally
         {

@@ -1,4 +1,5 @@
-﻿using System.Diagnostics;
+﻿using System.Collections.Concurrent;
+using System.Diagnostics;
 using System.Threading.Channels;
 
 namespace VestPocket;
@@ -17,13 +18,15 @@ internal class TransactionQueue<TBaseType> where TBaseType : class, IEntity
     private CancellationTokenSource processQueuesCancellationTokenSource;
     private readonly Channel<Transaction<TBaseType>> queueItemChannel;
 
+    public TransactionMetrics Metrics { get; init; } = new();
+
 
     public TransactionQueue(
         TransactionLog<TBaseType> transactionStore,
         EntityStore<TBaseType> memoryStore
     )
     {
-        this.queueItemChannel = Channel.CreateUnbounded<Transaction<TBaseType>>(new UnboundedChannelOptions { SingleReader = true });
+        this.queueItemChannel = Channel.CreateUnbounded<Transaction<TBaseType>>(new UnboundedChannelOptions { SingleReader = true, AllowSynchronousContinuations = true });
         this.transactionStore = transactionStore;
         this.memoryStore = memoryStore;
     }
@@ -51,19 +54,30 @@ internal class TransactionQueue<TBaseType> where TBaseType : class, IEntity
 
         var cancellationToken = processQueuesCancellationTokenSource.Token;
 
+        Stopwatch sw = new();
         try
         {
             while (!cancellationToken.IsCancellationRequested )
             {
                 Transaction<TBaseType> transaction = await queueItemChannel.Reader.ReadAsync(cancellationToken);
+                this.Metrics.queueWaits++;
+                sw.Restart();
+                memoryStore.Lock();
+                this.Metrics.acquiringWriteLockTime += sw.Elapsed;
+                sw.Restart();
                 do
                 {
-                    memoryStore.Lock();
                     var appliedInMemory = memoryStore.ProcessTransaction(transaction);
+                    this.Metrics.validationTime += sw.Elapsed;
+
                     if (appliedInMemory)
                     {
-                        transactionStore.WriteTransaction(transaction);
+                        sw.Restart();
+                        this.Metrics.bytesSerialized += transactionStore.WriteTransaction(transaction);
+                        this.Metrics.serializationTime += sw.Elapsed;
                     }
+                    this.Metrics.count++;
+
                 } while (queueItemChannel.Reader.TryRead(out transaction));
                 memoryStore.Unlock();
             }
@@ -74,7 +88,7 @@ internal class TransactionQueue<TBaseType> where TBaseType : class, IEntity
 
     }
 
-    public Task Enqueue(Transaction<TBaseType> transaction)
+    public void Enqueue(Transaction<TBaseType> transaction)
     {
         if (!queueItemChannel.Writer.TryWrite(transaction))
         {
@@ -89,6 +103,5 @@ internal class TransactionQueue<TBaseType> where TBaseType : class, IEntity
                 throw new Exception("Could not write to transaction processor get queue for an unknown reason");
             }
         }
-        return transaction.Task;
     }
 }

@@ -56,7 +56,7 @@ internal class TransactionLog<T> : IDisposable where T : class, IEntity
 
         var itemsRewritten = 0;
 
-        var allItems = memoryStore.GetByPrefix<T>("", false).ToArray();
+        var allItems = memoryStore.GetByPrefix<T>("", false);
         
         Stream stream = rewriteStream;
         if (isDisposing) { return; }
@@ -95,7 +95,6 @@ internal class TransactionLog<T> : IDisposable where T : class, IEntity
         }
 
         stream.Flush();
-
 
         lock (writeLock)
         {
@@ -273,9 +272,8 @@ internal class TransactionLog<T> : IDisposable where T : class, IEntity
             {
                 entity = await JsonSerializer.DeserializeAsync<T>(viewStream, jsonTypeInfo, cancellationToken);
             }
-            catch(Exception ex)
+            catch(Exception)
             {
-                ;
             }
             if (entity != null) 
             {
@@ -332,29 +330,34 @@ internal class TransactionLog<T> : IDisposable where T : class, IEntity
         }
     }
 
-    public void WriteTransaction(Transaction<T> transaction)
+    public long WriteTransaction(Transaction<T> transaction)
     {
+        long bytesWritten = 0;
         if (transaction.IsSingleChange)
         {
-            WriteDocumentChange(transaction.Entity);
+            bytesWritten = WriteDocumentChange(transaction.Entity);
         }
         else
         {
             for (int i = 0; i < transaction.Entities.Length; i++)
             {
-                WriteDocumentChange(transaction.Entities[i]);
+                bytesWritten += WriteDocumentChange(transaction.Entities[i]);
             }
         }
         transaction.Complete();
+        return bytesWritten;
     }
 
     private const byte LF = 10;
 
-    private void WriteDocumentChange(T entity)
+    private long WriteDocumentChange(T entity)
     {
+        long startingPosition;
+        long endingPosition;
+
         lock (writeLock)
         {
-            var startingPosition = outputStream.Position;
+            startingPosition = outputStream.Position;
 
             // If the file is blank, dump a header value
             if (startingPosition == 0)
@@ -389,7 +392,10 @@ internal class TransactionLog<T> : IDisposable where T : class, IEntity
                 rewriteTailBuffer.WriteByte(LF);
             }
 
+            endingPosition = outputStream.Position;
         }
+
+        return endingPosition - startingPosition;
 
     }
 
@@ -461,7 +467,7 @@ internal class TransactionLog<T> : IDisposable where T : class, IEntity
 
         brotliStream.Dispose();
 
-        Console.WriteLine("Rewrite compression took: " + sw.ElapsedMilliseconds + "ms");
+        //Console.WriteLine("Rewrite compression took: " + sw.ElapsedMilliseconds + "ms");
     }
 
     public Task RewriteTask => rewriteTask;

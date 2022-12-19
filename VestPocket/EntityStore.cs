@@ -1,4 +1,6 @@
-﻿namespace VestPocket;
+﻿using System.Text;
+
+namespace VestPocket;
 
 /// <summary>
 /// A light transactional wrapper around storing entities in memory.
@@ -52,14 +54,14 @@ internal class EntityStore<T> where T : class, IEntity
     /// Retreives an IEnumerable<T> of all entities that have keys that start with the exact string value of <paramref name="prefix"/>
     /// </summary>
     /// <typeparam name="TSelection">The type that the Entity should be selected as. Must be castable from <typeparamref name="T"/></typeparam>
-    /// <param name="prefix">The prefix that will be used to search for matches. Matching will be done on the UTF8 bytes of the string</param>
+    /// <param name="prefix">The prefix that will be used to search for matches.</param>
     /// <param name="sortResults">If the results will be sorted by key when returned.</param>
     /// <returns></returns>
-    public IEnumerable<TSelection> GetByPrefix<TSelection>(string prefix, bool sortResults) where TSelection : class, T
+    public TSelection[] GetByPrefix<TSelection>(string prefix, bool sortResults) where TSelection : class, T
     {
         if (sortResults)
         {
-            return lookup.GetByPrefix<TSelection>(prefix).OrderBy(x => x.Key);
+            return lookup.GetByPrefix<TSelection>(prefix).OrderBy(x => x.Key).ToArray();
         }
         else
         {
@@ -77,7 +79,9 @@ internal class EntityStore<T> where T : class, IEntity
 
         if (transaction.IsSingleChange)
         {
+            
             var entity = transaction.Entity;
+
             var existingDocument = lookup.Get(entity.Key);
             if (existingDocument != null)
             {
@@ -110,6 +114,7 @@ internal class EntityStore<T> where T : class, IEntity
             for (int i = 0; i < transaction.Entities.Length; i++)
             {
                 var entity = transaction.Entities[i];
+
                 var existingDocument = lookup.Get(entity.Key);
                 if (existingDocument != null)
                 {
@@ -155,19 +160,20 @@ internal class EntityStore<T> where T : class, IEntity
     /// <param name="entity"></param>
     public void LoadChange(string key, T entity)
     {
-        var existingRecord = lookup.Get(key);
+
+        var existingRecord = lookup.Get(entity.Key);
         if (existingRecord != null)
         {
             if (entity.Version > existingRecord.Version)
             {
-                lookup.Add(key, entity);
+                lookup.Add(entity.Key, entity);
             }
             deadEntityCount++;
         }
         else
         {
             entityCount++;
-            lookup.Add(key, entity);
+            lookup.Add(entity.Key, entity);
         }
     }
 

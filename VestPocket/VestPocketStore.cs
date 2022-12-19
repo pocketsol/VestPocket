@@ -26,6 +26,8 @@ public class VestPocketStore<TEntity> : IDisposable where TEntity : class, IEnti
         0.0 :
         memoryStore.DeadEntityCount / memoryStore.EntityCount;
 
+    public TransactionMetrics TransactionMetrics => this.transactionQueue.Metrics;
+
     public VestPocketStore(
         JsonTypeInfo<TEntity> jsonTypeInfo, VestPocketOptions options
         )
@@ -123,7 +125,8 @@ public class VestPocketStore<TEntity> : IDisposable where TEntity : class, IEnti
     {
         EnsureWriteAccess();
         var transaction = new Transaction<TEntity>(entities);
-        await transactionQueue.Enqueue(transaction);
+        transactionQueue.Enqueue(transaction);
+        await transaction.Task;
         return transaction.Entities;
     }
 
@@ -131,7 +134,8 @@ public class VestPocketStore<TEntity> : IDisposable where TEntity : class, IEnti
     {
         EnsureWriteAccess();
         var transaction = new Transaction<TEntity>(entity);
-        await transactionQueue.Enqueue(transaction);
+        transactionQueue.Enqueue(transaction);
+        await transaction.Task;
         return (T)transaction.Entity;
     }
 
@@ -140,7 +144,7 @@ public class VestPocketStore<TEntity> : IDisposable where TEntity : class, IEnti
         return memoryStore.Get(key) as T;
     }
 
-    public IEnumerable<T> GetByPrefix<T>(string prefix, bool sortResults) where T : class, TEntity
+    public T[] GetByPrefix<T>(string prefix, bool sortResults) where T : class, TEntity
     {
         return memoryStore.GetByPrefix<T>(prefix, sortResults);
     }
