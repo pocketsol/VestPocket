@@ -193,55 +193,31 @@ internal class Node<T> where T : class, IEntity
 
     public void GetAllValuesAtOrBelow<TSelection>(PrefixResult<TSelection> result) where TSelection : class, T
     {
-        if (Value != null)
+        if (Value != null) { result.Add((TSelection)this.Value); }
+        if (Children == null) return;
+
+        foreach (var child in Children)
         {
-            result.Add((TSelection)this.Value);
-        }
-        if (Children != null)
-        {
-            // Yes this looks stupid, but it performed about 10% better than a simple recursion.
-            foreach (var child in Children)
+            // 'unrolling' some of the recursion to inline looping gave a performance boost
+            // child.GetAllValuesAtOrBelow(result);
+            if (child.Value != null) { result.Add((TSelection)child.Value); }
+            if (child.Children == null) continue;
+            foreach (var child2 in child.Children)
             {
-                if (child.Value != null) { result.Add((TSelection)child.Value); }
-                if (child.Children != null)
+                if (child2.Value != null) { result.Add((TSelection)child2.Value); }
+                if (child2.Children == null) continue;
+                foreach (var child3 in child2.Children)
                 {
-                    foreach (var subChild1 in child.Children)
+                    if (child3.Value != null) { result.Add((TSelection)child3.Value); }
+                    if (child3.Children == null) continue;
+                    foreach (var child4 in child3.Children)
                     {
-                        if (subChild1.Value != null) { result.Add((TSelection)subChild1.Value); }
-                        if (subChild1.Children != null)
-                        {
-                            foreach (var subChild2 in subChild1.Children)
-                            {
-                                if (subChild2.Value != null) { result.Add((TSelection)subChild2.Value); }
-                                if (subChild2.Children != null)
-                                {
-                                    foreach (var subChild3 in subChild2.Children)
-                                    {
-                                        subChild3.GetAllValuesAtOrBelow(result);
-                                    }
-                                }
-                            }
-                        }
+                        child4.GetAllValuesAtOrBelow(result);
                     }
                 }
             }
         }
     }
-
-    //public void GetAllValuesAtOrBelow<TSelection>(PrefixResult<TSelection> result) where TSelection : class, T
-    //{
-    //    if (Value != null)
-    //    {
-    //        result.Add((TSelection)this.Value);
-    //    }
-    //    if (Children != null)
-    //    {
-    //        foreach (var child in Children)
-    //        {
-    //            child.GetAllValuesAtOrBelow(result);
-    //        }
-    //    }
-    //}
 
     /// <summary>
     /// Looks for a child node that has a key segment that matches part of the prefix of a given key segment
