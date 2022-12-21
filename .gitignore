@@ -360,3 +360,10 @@ MigrationBackup/
 
 # Fody - auto-generated XML schema
 FodyWeavers.xsd
+.idea/.idea.VestPocket/.idea/vcs.xml
+.idea/.idea.VestPocket/.idea/sonarlint/issuestore/
+.idea/.idea.VestPocket/.idea/indexLayout.xml
+.idea/.idea.VestPocket/.idea/encodings.xml
+.idea/.idea.VestPocket/.idea/discord.xml
+.idea/.idea.VestPocket/.idea/workspace.xml
+.idea/.idea.VestPocket/.idea/projectSettingsUpdater.xml

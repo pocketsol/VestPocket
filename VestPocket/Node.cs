@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
 using System.Runtime.CompilerServices;
 using System.Threading.Tasks;
@@ -13,6 +14,9 @@ namespace VestPocket;
 internal class Node<T> where T : class, IEntity
 {
     public Node<T> Parent = null;
+
+    public int AncestorCount { get; private set; } = 0;
+    public int DescendantCount { get; private set; } = 0;
 
     public string KeySegment;
 
@@ -30,6 +34,22 @@ internal class Node<T> where T : class, IEntity
     {
         this.Parent = parent;
         this.KeySegment = label;
+        
+        IncrementCountForAncestors();
+    }
+
+    private void IncrementCountForAncestors()
+    {
+        var visits = 0;
+        var descendant = this;
+        while (descendant.Parent != null)
+        {
+            descendant.DescendantCount++;
+            visits++;
+            descendant = descendant.Parent;
+        }
+
+        AncestorCount = visits;
     }
 
     public void SetValue(ReadOnlySpan<char> key, T value)
@@ -98,6 +118,8 @@ internal class Node<T> where T : class, IEntity
             Array.Resize(ref Children, Children.Length + 1);
         }
         Children[^1] = newChild;
+
+        newChild.IncrementCountForAncestors();
     }
 
     public void SplitKeySegmentAtLength(int startingCharacter)
@@ -193,29 +215,21 @@ internal class Node<T> where T : class, IEntity
 
     public void GetAllValuesAtOrBelow<TSelection>(PrefixResult<TSelection> result) where TSelection : class, T
     {
-        if (Value != null) { result.Add((TSelection)this.Value); }
-        if (Children == null) return;
-
-        foreach (var child in Children)
+        var childrenArr = new Node<T>[DescendantCount];
+        var dequeueCursor = 0;
+        var enqueueCursor = Children.Length;
+        Array.Copy(Children, childrenArr, Children.Length);
+        while (dequeueCursor > DescendantCount - 1)
         {
-            // 'unrolling' some of the recursion to inline looping gave a performance boost
-            // child.GetAllValuesAtOrBelow(result);
-            if (child.Value != null) { result.Add((TSelection)child.Value); }
-            if (child.Children == null) continue;
-            foreach (var child2 in child.Children)
-            {
-                if (child2.Value != null) { result.Add((TSelection)child2.Value); }
-                if (child2.Children == null) continue;
-                foreach (var child3 in child2.Children)
-                {
-                    if (child3.Value != null) { result.Add((TSelection)child3.Value); }
-                    if (child3.Children == null) continue;
-                    foreach (var child4 in child3.Children)
-                    {
-                        child4.GetAllValuesAtOrBelow(result);
-                    }
-                }
-            }
+            var child = childrenArr[dequeueCursor++];
+
+            if (child.Value != null)
+                result.Add((TSelection)child.Value);
+            
+            if (child.Children == null)
+                continue;
+            foreach (var descendant in child.Children)
+                childrenArr[enqueueCursor++] = descendant;
         }
     }
 
