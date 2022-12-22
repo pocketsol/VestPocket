@@ -47,7 +47,7 @@ namespace VestPocket.ConsoleTest
 
             await TimeIterations("Prefix Search", (thread, i) =>
             {
-                using var prefixSearch = connection.GetByPrefix<Entity>(thread.ToString() + "-");
+                using var prefixSearch = connection.GetByPrefix<Entity>(thread.ToString() + "-99");
                 foreach (var result in prefixSearch.Results)
                 {
                     if (result == null)
@@ -96,7 +96,7 @@ namespace VestPocket.ConsoleTest
 
             await TimeIterations("Prefix Search", (thread, i) =>
             {
-                using var prefixSearch = readOnlyConnection.GetByPrefix<Entity>(thread.ToString() + "-");
+                using var prefixSearch = readOnlyConnection.GetByPrefix<Entity>(thread.ToString() + "-99");
                 foreach (var result in prefixSearch.Results)
                 {
                     if (result == null)
@@ -165,9 +165,9 @@ namespace VestPocket.ConsoleTest
                     return Task.CompletedTask;
                 }, threads, iterations);
 
-                await TimeIterations("LiteDb Get Entities", (thread, i) =>
+                await TimeIterations("LiteDb Prefix Search", (thread, i) =>
                 {
-                    string startsWith = thread.ToString() + "-123";
+                    string startsWith = thread.ToString() + "-99";
                     var query = col.Query().Where(x => x.Key.StartsWith(startsWith)).ToList();
                     foreach (var item in query)
                     {

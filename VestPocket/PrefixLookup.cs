@@ -31,24 +31,28 @@ internal class PrefixLookup<T> where T : class, IEntity
     private readonly Node<T> root;
 
     private readonly ReaderWriterLockSlim lockSlim = new();
-    private readonly bool synchronized;
+    private bool readOnly;
+
+    internal bool ReadOnly { get => readOnly; set => readOnly = value; }
 
     /// <summary>
     /// Creates a PrefixLookup of type T.
     /// </summary>
-    /// <param name="synchronized">If read and write access should be syncrhonized behind reader writer locks</param>
-    public PrefixLookup(bool synchronized)
+    /// <param name="readOnly">If read and write access should be syncrhonized behind reader writer locks</param>
+    public PrefixLookup(bool readOnly)
     {
         root = new Node<T>();
-        this.synchronized = synchronized;
+        this.readOnly = readOnly;
     }
 
     public int NodeCount => root.GetChildrenCount();
 
     public int Count => root.GetValuesCount();
 
-    public void Add(ReadOnlySpan<char> keyBytes, T value)
+    public void Set(ReadOnlySpan<char> keyBytes, T value)
     {
+        if (readOnly) throw new InvalidOperationException("Cannot set values in a PrefixLookup that is read only");
+
         if (lockSlim.IsWriteLockHeld)
         {
             root.SetValue(keyBytes, value);
@@ -71,7 +75,7 @@ internal class PrefixLookup<T> where T : class, IEntity
     /// </summary>
     public void Lock()
     {
-        if (!synchronized) return;
+        if (readOnly) return;
         if (lockSlim.IsWriteLockHeld) return;
         lockSlim.EnterWriteLock();
     }
@@ -81,7 +85,7 @@ internal class PrefixLookup<T> where T : class, IEntity
     /// </summary>
     public void Unlock()
     {
-        if (!synchronized) return;
+        if (readOnly) return;
         if (lockSlim.IsWriteLockHeld)
         {
             lockSlim.ExitWriteLock();
@@ -91,7 +95,7 @@ internal class PrefixLookup<T> where T : class, IEntity
     public T Get(ReadOnlySpan<char> key)
     {
 
-        if (!synchronized || lockSlim.IsWriteLockHeld)
+        if (readOnly || lockSlim.IsWriteLockHeld)
         {
             return root.GetValue(key)?.Value;
         }
@@ -110,6 +114,9 @@ internal class PrefixLookup<T> where T : class, IEntity
 
     public void Clear()
     {
+
+        if (readOnly) throw new InvalidOperationException("Cannot clear a PrefixLookup that is read only");
+
         if (lockSlim.IsWriteLockHeld)
         {
             this.root.Value = null;
@@ -135,11 +142,11 @@ internal class PrefixLookup<T> where T : class, IEntity
 
         PrefixResult<TSelection> result = new(keyPrefix);
 
-        if (!synchronized || lockSlim.IsWriteLockHeld)
+        if (readOnly || lockSlim.IsWriteLockHeld)
         {
             if (keyPrefix == string.Empty)
             {
-                root.GetAllValuesAtOrBelow(result);
+                root.CollectValues(result);
             }
             else
             {
@@ -153,7 +160,7 @@ internal class PrefixLookup<T> where T : class, IEntity
         {
             if (keyPrefix == string.Empty)
             {
-                root.GetAllValuesAtOrBelow(result);
+                root.CollectValues(result);
             }
             else
             {

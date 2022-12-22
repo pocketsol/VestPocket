@@ -8,14 +8,15 @@ internal class EntityStore<T> where T : class, IEntity
 {
 
     private readonly PrefixLookup<T> lookup;
-
+    private readonly bool readOnly;
     private long deadEntityCount;
     private long entityCount;
     public long DeadEntityCount => deadEntityCount;
     public long EntityCount => entityCount;
-    public EntityStore(bool synchronized)
+    public EntityStore(bool readOnly)
     {
-        lookup = new(synchronized);
+        lookup = new(readOnly);
+        this.readOnly = readOnly;
     }
 
     /// <summary>
@@ -25,6 +26,21 @@ internal class EntityStore<T> where T : class, IEntity
     public void Lock()
     {
         lookup.Lock();
+    }
+
+    /// <summary>
+    /// Temporarily locks and allows changes to this entity store.
+    /// Useful to load the initial records from disk.
+    /// </summary>
+    internal void BeginLoading()
+    {
+        Lock();
+        lookup.ReadOnly = false;
+    }
+
+    internal void EndLoading() { 
+        Unlock();
+        lookup.ReadOnly = this.readOnly;
     }
 
     /// <summary>
@@ -97,7 +113,7 @@ internal class EntityStore<T> where T : class, IEntity
             }
 
             entity = (T)entity.WithVersion(entity.Version + 1);
-            lookup.Add(entity.Key, entity);
+            lookup.Set(entity.Key, entity);
 
             transaction.Entity = entity;
         }
@@ -136,7 +152,7 @@ internal class EntityStore<T> where T : class, IEntity
             {
                 var change = transaction.Entities[i];
                 change = (T)change.WithVersion(change.Version + 1);
-                lookup.Add(change.Key, change);
+                lookup.Set(change.Key, change);
                 transaction.Entities[i] = change;
             }
         }
@@ -152,7 +168,7 @@ internal class EntityStore<T> where T : class, IEntity
     /// </summary>
     /// <param name="key"></param>
     /// <param name="entity"></param>
-    public void LoadChange(string key, T entity)
+    public void LoadChange(T entity)
     {
 
         var existingRecord = lookup.Get(entity.Key);
@@ -160,14 +176,14 @@ internal class EntityStore<T> where T : class, IEntity
         {
             if (entity.Version > existingRecord.Version)
             {
-                lookup.Add(entity.Key, entity);
+                lookup.Set(entity.Key, entity);
             }
             deadEntityCount++;
         }
         else
         {
             entityCount++;
-            lookup.Add(entity.Key, entity);
+            lookup.Set(entity.Key, entity);
         }
     }
 

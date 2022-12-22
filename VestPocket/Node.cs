@@ -13,13 +13,9 @@ namespace VestPocket;
 internal class Node<T> where T : class, IEntity
 {
     public Node<T> Parent = null;
-
     public string KeySegment;
-
     public Node<T>[] Children;
     public T Value;
-
-    private static readonly byte[] EmptyKeyBytes = new byte[] { }; 
 
     public Node()
     {
@@ -173,46 +169,60 @@ internal class Node<T> where T : class, IEntity
         {
             foreach (var child in Children)
             {
-                var matchingBytes = key.CommonPrefixLength(child.KeySegment);
-                if (matchingBytes > 0)
+                var matchingCharacters = key.CommonPrefixLength(child.KeySegment);
+                if (matchingCharacters > 0)
                 {
-                    if (matchingBytes == key.Length)
+                    if (matchingCharacters == key.Length)
                     {
                         // We found a key that matched the entire prefix,
                         // either exactly or at least to the length of the search key
-                        child.GetAllValuesAtOrBelow(result);
+
+                        child.CollectValues(result);
                     }
-                    else if (matchingBytes < key.Length)
+                    else if (matchingCharacters < key.Length)
                     {
-                        child.GetValuesByPrefix(key.Slice(matchingBytes), result);
+                        child.GetValuesByPrefix(key.Slice(matchingCharacters), result);
                     }
                 }
             }
         }
     }
 
-    public void GetAllValuesAtOrBelow<TSelection>(PrefixResult<TSelection> result) where TSelection : class, T
+    public void CollectValues<TSelection>(PrefixResult<TSelection> result) where TSelection : class, T
     {
-        if (Value != null) { result.Add((TSelection)this.Value); }
+        result.SetSize(CountValues());
+        CollectValuesRecursive(result);
+    }
+
+    private void CollectValuesRecursive<TSelection>(PrefixResult<TSelection> result) where TSelection : class, T
+    {
+        if (Value != null) result.Add((TSelection)this.Value);
         if (Children == null) return;
 
         foreach (var child in Children)
         {
-            // 'unrolling' some of the recursion to inline looping gave a performance boost
-            // child.GetAllValuesAtOrBelow(result);
-            if (child.Value != null) { result.Add((TSelection)child.Value); }
+            // Instead of just using this:
+            // child.CollectValues(result);
+
+            // For performance reasons in this hotpath method,
+            // We unroll a few layers of child values before recursing
+
+            if (child.Value != null) result.Add((TSelection)child.Value);
             if (child.Children == null) continue;
+
             foreach (var child2 in child.Children)
             {
-                if (child2.Value != null) { result.Add((TSelection)child2.Value); }
+                if (child2.Value != null) result.Add((TSelection)child2.Value);
                 if (child2.Children == null) continue;
+
                 foreach (var child3 in child2.Children)
                 {
-                    if (child3.Value != null) { result.Add((TSelection)child3.Value); }
+                    if (child3.Value != null) result.Add((TSelection)child3.Value);
                     if (child3.Children == null) continue;
+
                     foreach (var child4 in child3.Children)
                     {
-                        child4.GetAllValuesAtOrBelow(result);
+                        child4.CollectValuesRecursive(result);
                     }
                 }
             }
@@ -294,6 +304,21 @@ internal class Node<T> where T : class, IEntity
     public int GetChildrenCount()
     {
         return GetChildrenCountInternal(0);
+    }
+
+    public int CountValues(int runningCount = 0)
+    {
+        if (Value != null) runningCount++;
+
+        if (Children != null)
+        {
+            for (int i = 0; i < Children.Length; i++)
+            {
+                Node<T> child = Children[i];
+                runningCount = child.CountValues(runningCount);
+            }
+        }
+        return runningCount;
     }
 
     private int GetChildrenCountInternal(int runningCount)

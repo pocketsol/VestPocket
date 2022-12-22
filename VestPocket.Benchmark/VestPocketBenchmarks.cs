@@ -45,17 +45,17 @@ namespace VestPocket.Benchmark
             testDocument = store.Get<Entity>(testKey);
         }
 
-        [Benchmark]
-        public void GetByKey()
-        {
-            var document = store.Get<Entity>(testKey);
-        }
+        //[Benchmark]
+        //public void GetByKey()
+        //{
+        //    var document = store.Get<Entity>(testKey);
+        //}
 
-        [Benchmark]
-        public async Task SetKey()
-        {
-            testDocument = await store.Save(testDocument);
-        }
+        //[Benchmark]
+        //public async Task SetKey()
+        //{
+        //    testDocument = await store.Save(testDocument);
+        //}
 
         [Benchmark]
         public void GetKeyPrefix()

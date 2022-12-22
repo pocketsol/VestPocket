@@ -14,16 +14,16 @@ public class VestPocketStore<TEntity> : IDisposable where TEntity : class, IEnti
 
     private TransactionQueue<TEntity> transactionQueue;
     private TransactionLog<TEntity> transactionStore;
-    private EntityStore<TEntity> memoryStore;
+    private EntityStore<TEntity> entityStore;
     private string directory;
     private bool disposing = false;
 
     public bool IsDisposed => this.disposing;
-    public long DeadEntityCount => memoryStore.DeadEntityCount;
-    public long EntityCount => memoryStore.EntityCount;
-    public double DeadSpacePercentage => memoryStore.EntityCount == 0 ?
+    public long DeadEntityCount => entityStore.DeadEntityCount;
+    public long EntityCount => entityStore.EntityCount;
+    public double DeadSpacePercentage => entityStore.EntityCount == 0 ?
         0.0 :
-        memoryStore.DeadEntityCount / memoryStore.EntityCount;
+        entityStore.DeadEntityCount / entityStore.EntityCount;
 
     public TransactionMetrics TransactionMetrics => this.transactionQueue.Metrics;
 
@@ -49,7 +49,7 @@ public class VestPocketStore<TEntity> : IDisposable where TEntity : class, IEnti
     public async Task OpenAsync(CancellationToken cancellationToken)
     {
 
-        this.memoryStore = new EntityStore<TEntity>(synchronized: !options.ReadOnly);
+        this.entityStore = new EntityStore<TEntity>(readOnly: options.ReadOnly);
 
         TransactionLog<TEntity> transactionStore = null;
 
@@ -61,7 +61,7 @@ public class VestPocketStore<TEntity> : IDisposable where TEntity : class, IEnti
                 memoryStream,
                 () => new MemoryStream(),
                 SwapMemoryRewriteStream,
-                memoryStore,
+                entityStore,
                 jsonTypeInfo,
                 options
             );
@@ -79,7 +79,7 @@ public class VestPocketStore<TEntity> : IDisposable where TEntity : class, IEnti
                 file,
                 RewriteFileStreamFactory,
                 SwapFileRewriteStream,
-                memoryStore,
+                entityStore,
                 jsonTypeInfo,
                 options
                 );
@@ -92,7 +92,7 @@ public class VestPocketStore<TEntity> : IDisposable where TEntity : class, IEnti
 
         if (!options.ReadOnly)
         {
-            this.transactionQueue = new TransactionQueue<TEntity>(transactionStore, memoryStore);
+            this.transactionQueue = new TransactionQueue<TEntity>(transactionStore, entityStore);
             await this.transactionQueue.Start();
         }
 
@@ -140,12 +140,12 @@ public class VestPocketStore<TEntity> : IDisposable where TEntity : class, IEnti
 
     public T Get<T>(string key) where T : class, TEntity
     {
-        return memoryStore.Get(key) as T;
+        return entityStore.Get(key) as T;
     }
 
     public PrefixResult<T> GetByPrefix<T>(string prefix) where T : class, TEntity
     {
-        return memoryStore.GetByPrefix<T>(prefix);
+        return entityStore.GetByPrefix<T>(prefix);
     }
 
     public void Dispose()
@@ -184,15 +184,15 @@ public class VestPocketStore<TEntity> : IDisposable where TEntity : class, IEnti
     public void Clear()
     {
         EnsureWriteAccess();
-        this.memoryStore.Lock();
+        this.entityStore.Lock();
         try
         {
-            this.memoryStore.RemoveAllDocuments();
+            this.entityStore.RemoveAllDocuments();
             this.transactionStore.RemoveAllDocuments();
         }
         finally
         {
-            this.memoryStore.Unlock();
+            this.entityStore.Unlock();
         }
     }
 
@@ -204,10 +204,12 @@ public class VestPocketStore<TEntity> : IDisposable where TEntity : class, IEnti
 
     private async Task LoadRecordsFromStore(CancellationToken cancellationToken)
     {
+        entityStore.BeginLoading();
         await foreach (var record in this.transactionStore.LoadRecords(cancellationToken))
         {
-            memoryStore.LoadChange(record.Key, record);
+            entityStore.LoadChange(record);
         }
+        entityStore.EndLoading();
     }
 
     private void EnsureWriteAccess()
