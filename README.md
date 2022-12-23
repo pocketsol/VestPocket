@@ -196,7 +196,7 @@ Latency Median: 0.001400 Max:0.552880
 --Read and Write Mix (threads:1000, iterations:1000)--
 Throughput 281886/s
 Latency Median: 3.444500 Max:3.546834
-S
+
 -----Transaction Metrics-------------
 Count: 3000000
 Validation Time: 1.8us

@@ -7,7 +7,7 @@
 /// </summary>
 public class ConcurrencyException : Exception
 {
-    public ConcurrencyException(string key, int saveVersion, int actualVersion) : 
+    public ConcurrencyException(string key, int saveVersion, int actualVersion) :
         base($"Could not save {key} with {saveVersion} as the current version is {actualVersion}")
     {
     }

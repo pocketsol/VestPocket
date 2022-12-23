@@ -42,11 +42,11 @@ internal class ViewStream : Stream
 
         if (remaining < count)
         {
-            count = (int)remaining; 
+            count = (int)remaining;
         }
 
         int read = baseStream.Read(buffer, offset, count);
-        
+
         position += read;
 
         return read;

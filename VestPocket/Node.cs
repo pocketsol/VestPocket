@@ -33,7 +33,7 @@ internal class Node<T> where T : class, IEntity
                 {
                     // We found a child node that matches our key exactly
                     // E.g. Key = "apple" and child key = "apple"
-                    matchingChild.Value = value;                        
+                    matchingChild.Value = value;
                 }
                 else
                 {
@@ -63,14 +63,14 @@ internal class Node<T> where T : class, IEntity
                     SplitChild(matchingLength, matchingIndex);
                     matchingChild = Children[matchingIndex];
                     matchingChild.SetValue(key.Slice(matchingLength), value);
-                }                    
+                }
             }
         }
         else
         {
             // There were no matching children. 
             // E.g. Key = "apple" and no child that even starts with 'a'. Add a new child node
-            string keySegment = new string( key );
+            string keySegment = new string(key);
             var newChild = new Node<T>(keySegment);
             newChild.Value = value;
 
@@ -115,7 +115,7 @@ internal class Node<T> where T : class, IEntity
         splitChild.Children = child.Children;
 
         var splitParentKey = child.KeySegment.Substring(0, startingCharacter);
-        var splitParent = new Node<T>(splitParentKey) { Children = new Node<T>[] {splitChild} };
+        var splitParent = new Node<T>(splitParentKey) { Children = new Node<T>[] { splitChild } };
 
         Children[childIndex] = splitParent;
     }
@@ -125,11 +125,11 @@ internal class Node<T> where T : class, IEntity
         if (Children == null) return null;
         //var remainingKeyLength = key.Length - startingCharacter;
 
-        foreach(var child in Children)
+        foreach (var child in Children)
         {
             var matchingBytes = key.CommonPrefixLength(child.KeySegment);
             //var matchingBytes = GetMatchingBytes(key, child.KeySegment);
-               
+
             if (matchingBytes > 0)
             {
                 if (matchingBytes == key.Length)
@@ -152,7 +152,7 @@ internal class Node<T> where T : class, IEntity
                 else if (matchingBytes < key.Length)
                 {
                     return child.GetValue(key.Slice(matchingBytes));
-                }    
+                }
             }
         }
         return null;

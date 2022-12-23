@@ -28,7 +28,8 @@ internal class EntityStore<T> where T : class, IEntity
         lookup.ReadOnly = false;
     }
 
-    internal void EndLoading() { 
+    internal void EndLoading()
+    {
         lookup.ReadOnly = this.readOnly;
     }
 
@@ -54,9 +55,7 @@ internal class EntityStore<T> where T : class, IEntity
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public PrefixResult<TSelection> GetByPrefix<TSelection>(string prefix) where TSelection : class, T
     {
-        
         return lookup.GetByPrefix<TSelection>(prefix);
-
     }
 
     /// <summary>
@@ -66,10 +65,8 @@ internal class EntityStore<T> where T : class, IEntity
     /// <returns>Returns true if the transaction was applied without encountering a <see cref="ConcurrencyException"/>, false if one was set on the result of the transaction.</returns>
     public bool ProcessTransaction(Transaction<T> transaction)
     {
-
         if (transaction.IsSingleChange)
         {
-            
             var entity = transaction.Entity;
 
             var existingDocument = lookup.Get(entity.Key);

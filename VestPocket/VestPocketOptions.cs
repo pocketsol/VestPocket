@@ -13,19 +13,19 @@ public class VestPocketOptions
     /// null value, then records will be buffered into a MemoryStream instead of a FileStream,
     /// and is provided as an option for diagnostic and unit testing purposes.
     ///</summary>
-    public string FilePath {get;set;} = "store.db";
+    public string FilePath { get; set; } = "store.db";
 
     /// <summary>
     /// A name to give to the connection. This can be useful when differentiating multiple
     /// instances of VestPocket connections (such as when connections to different files are
     /// registered into DI/IoC). Default value is null
     /// </summary>
-    public string Name {get;set;} = null;
+    public string Name { get; set; } = null;
 
     ///<summary>
     /// If changes are allowed to entities after being loaded from the file or not. Default value is false
     ///</summary>
-    public bool ReadOnly {get;set;} = false;
+    public bool ReadOnly { get; set; } = false;
 
     /// <summary>
     /// The ratio of current records to dead records stored 
@@ -35,19 +35,19 @@ public class VestPocketOptions
     /// RewriteMinimum records are stored). Default value
     /// is 1.0
     /// </summary>
-    public double RewriteRatio {get;set;} = 1.0;
+    public double RewriteRatio { get; set; } = 1.0;
 
     /// <summary>
     /// The minimum number of records stored before a rewrite
     /// will be considered. Default value is 10,000
     /// </summary>
-    public int RewriteMinimum {get;set;} = 10_000;
+    public int RewriteMinimum { get; set; } = 10_000;
 
     /// <summary>
     /// If set, then the live records will be stored as a compressed
     /// block at the start of the rewritten file.
     /// </summary>
-    public bool CompressOnRewrite {get;set;} = false;
+    public bool CompressOnRewrite { get; set; } = false;
 
     /// <summary>
     /// Returns the first validation failure message, or null if the options appear valid

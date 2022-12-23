@@ -106,7 +106,7 @@ public class VestPocketStore<TEntity> : IDisposable where TEntity : class, IEnti
     public async Task Close(CancellationToken cancellationToken)
     {
         this.disposing = true;
-        
+
         if (!this.options.ReadOnly)
         {
             await this.transactionQueue.Stop();
@@ -159,10 +159,10 @@ public class VestPocketStore<TEntity> : IDisposable where TEntity : class, IEnti
         {
             this.transactionQueue.Stop().Wait();
         }
-        catch(OperationCanceledException)
+        catch (OperationCanceledException)
         {
         }
-        catch(AggregateException)
+        catch (AggregateException)
         {
 
         }
@@ -171,7 +171,7 @@ public class VestPocketStore<TEntity> : IDisposable where TEntity : class, IEnti
         {
             this.transactionStore.Dispose();
         }
-        catch(OperationCanceledException)
+        catch (OperationCanceledException)
         {
 
         }
@@ -241,7 +241,7 @@ public class VestPocketStore<TEntity> : IDisposable where TEntity : class, IEnti
         var filePath = Path.Combine(this.directory, fileName);
         var fs = new FileStream(filePath, FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None, 4096);
         return fs;
-    
+
     }
 
     private static Stream SwapMemoryRewriteStream(Stream outputStream, Stream rewriteStream)

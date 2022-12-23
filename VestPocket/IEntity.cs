@@ -1,6 +1,4 @@
-﻿using System.Text.Json.Serialization;
-
-namespace VestPocket;
+﻿namespace VestPocket;
 
 /// <summary>
 /// Represents the minimum interface that an entity must implement to be usable in VestPocket.

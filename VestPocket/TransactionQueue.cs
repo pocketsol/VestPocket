@@ -87,10 +87,6 @@ internal class TransactionQueue<TBaseType> where TBaseType : class, IEntity
 
     public void Enqueue(Transaction<TBaseType> transaction)
     {
-        if (transaction.Entity == null && transaction.Entities == null)
-        {
-            ;
-        }
         if (!queueItemChannel.Writer.TryWrite(transaction))
         {
             if (processQueuesCancellationTokenSource.IsCancellationRequested)

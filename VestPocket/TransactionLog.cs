@@ -53,7 +53,7 @@ internal class TransactionLog<T> : IDisposable where T : class, IEntity
         var itemsRewritten = 0;
 
         using var allItems = memoryStore.GetByPrefix<T>(string.Empty);
-        
+
         Stream stream = rewriteStream;
         if (isDisposing) { return; }
 
@@ -196,7 +196,7 @@ internal class TransactionLog<T> : IDisposable where T : class, IEntity
 
         var leaveOpen = !options.ReadOnly;
 
-        
+
         byte[] findNewLineBuffer = new byte[4096];
         var lineView = new ViewStream();
 
@@ -216,7 +216,7 @@ internal class TransactionLog<T> : IDisposable where T : class, IEntity
                     deflate.CopyTo(entityMemory);
                     entityMemory.Position = 0;
 
-                    await foreach(var entity in ReadEntitiesFromStream(entityMemory, findNewLineBuffer, cancellationToken))
+                    await foreach (var entity in ReadEntitiesFromStream(entityMemory, findNewLineBuffer, cancellationToken))
                     {
                         yield return entity;
                     }
@@ -226,7 +226,7 @@ internal class TransactionLog<T> : IDisposable where T : class, IEntity
 
         }
 
-        await foreach(var entity in ReadEntitiesFromStream(outputStream, findNewLineBuffer, cancellationToken))
+        await foreach (var entity in ReadEntitiesFromStream(outputStream, findNewLineBuffer, cancellationToken))
         {
             yield return entity;
         }
@@ -238,9 +238,9 @@ internal class TransactionLog<T> : IDisposable where T : class, IEntity
     {
         using var viewStream = new ViewStream();
 
-        while(true)
+        while (true)
         {
-            
+
             var startPosition = stream.Position;
 
             if (startPosition == stream.Length)
@@ -268,10 +268,10 @@ internal class TransactionLog<T> : IDisposable where T : class, IEntity
             {
                 entity = await JsonSerializer.DeserializeAsync(viewStream, jsonTypeInfo, cancellationToken);
             }
-            catch(Exception)
+            catch (Exception)
             {
             }
-            if (entity != null) 
+            if (entity != null)
             {
                 yield return entity;
             }
@@ -318,7 +318,7 @@ internal class TransactionLog<T> : IDisposable where T : class, IEntity
                 {
                     File.Delete(streamToCleanup.Name);
                 }
-                catch(Exception)
+                catch (Exception)
                 {
                 }
             }
@@ -430,14 +430,14 @@ internal class TransactionLog<T> : IDisposable where T : class, IEntity
         var compressedBackingStream = new MemoryStream();
         var brotliStream = new BrotliStream(compressedBackingStream, CompressionLevel.Optimal);
 
-        foreach(var entity in entities.Results) 
+        foreach (var entity in entities.Results)
         {
-            
+
             await JsonSerializer.SerializeAsync<T>(serializeStream, entity, jsonTypeInfo, cancellationToken);
             serializeStream.Write(LF, 0, 1);
 
             // half of the large object heap size
-            if (serializeStream.Position > 42_500) 
+            if (serializeStream.Position > 42_500)
             {
                 serializeStream.SetLength(serializeStream.Position);
                 serializeStream.Position = 0;

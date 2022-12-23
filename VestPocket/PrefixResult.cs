@@ -29,7 +29,7 @@ public class PrefixResult<TSelection> : IDisposable where TSelection : class, IE
 
     public IEnumerable<TSelection> GetResults()
     {
-        for(int i = 0; i < length; i++)
+        for (int i = 0; i < length; i++)
         {
             yield return buffer[i];
         }
