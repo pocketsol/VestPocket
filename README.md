@@ -82,12 +82,13 @@ If you attempt to save an entity with a version number that does not match the v
 ## Getting Records by a Key Prefix
  ```csharp
  
-    var entities = await store.GetByPrefix<Entity>("test");
-    foreach(var entity in entities)
+    using var search = await store.GetByPrefix<Entity>("test");
+    foreach(var entity in search.Results)
     {
         //...
     }
 ```
+Because prefix key searches can be arbitrarily large, the results are stored in pooled arrays to reduce allocations. The prefix results are returned attached to a PrefixResult object wich implements IDisposable.
 
 ## Deleting a Record
  ```csharp
@@ -150,79 +151,24 @@ This involves writing all of the live records to a new temporary file. When new 
 
 # Performance
 
-The VestPocket.ConsoleTest project contains some rudementary async performance tests comparing the performance of Vest Pocket to LiteDb and to ConcurrentDictionary. These tests are far from conclusive but imply that Vest Pocket is at least an order of magnitude faster than LiteDb and at least an order of magnitude slower than ConcurrentDictionary. Both of these comparisons are unfair, for various reasons.
 
-If you don't need the ability to persist data, apply a set of changes as a transaction, or the ability to search keys by a prefix value...then the performance of ConcurrentDictionary is quite good. If you need to store a very large amount of data or have a limited amount of RAM available, or want to utilize advanced query and indexing features, then LiteDb might be a better choice.
-
-## *Sample output from running VestPocket.ConsoleTest*
-```console
----------Running VestPocket---------
-
---Save Entities (threads:1000, iterations:100)--
-Throughput 295250/s
-Latency Median: 3.276600 Max:3.355136
-
---Read Entities (threads:1000, iterations:100)--
-Throughput 2226770/s
-Latency Median: 0.001400 Max:0.257704
-
---Prefix Search (threads:1000, iterations:100)--
-Throughput 3917451/s
-Latency Median: 0.002700 Max:0.135011
-
---Read and Write Mix (threads:1000, iterations:100)--
-Throughput 202602/s
-Latency Median: 4.319100 Max:4.926419
-
-----Running ConcurrentDictionary----
-
---ConcurrentDictionary Save Entities (threads:1000, iterations:100)--
-Throughput 7357594/s
-Latency Median: 0.000500 Max:0.054178
-
---ConcurrentDictionary Read Entities (threads:1000, iterations:100)--
-Throughput 20653049/s
-Latency Median: 0.000200 Max:0.004747
-
---ConcurrentDictionary Read and Write Mix (threads:1000, iterations:100)--
-Throughput 7407353/s
-Latency Median: 0.001900 Max:0.008407
-
-----------Running LiteDb-------------
-
---LiteDb Save Entities (threads:1000, iterations:100)--
-Throughput 12174/s
-Latency Median: 1.134000 Max:25.306619
-
---LiteDb Read Entities (threads:1000, iterations:100)--
-Throughput 172192/s
-Latency Median: 0.081400 Max:0.723352
-
---LiteDb Get Entities (threads:1000, iterations:100)--
-Throughput 187811/s
-Latency Median: 0.074500 Max:0.487134
-
---LiteDb Read and Write Mix (threads:1000, iterations:100)--
-Throughput 8573/s
-Latency Median: 2.303100 Max:16.042014
-```
 ## *Sample Output from Runnning VestPocket.Benchmark*
 ```console
 // * Summary *
 
-BenchmarkDotNet=v0.13.1, OS=Windows 10.0.19044.2251 (21H2)
+BenchmarkDotNet=v0.13.1, OS=Windows 10.0.19044.2364 (21H2)
 AMD Ryzen 7 5700G with Radeon Graphics, 1 CPU, 16 logical and 8 physical cores
 .NET SDK=7.0.100
   [Host]     : .NET 7.0.0 (7.0.22.51805), X64 RyuJIT
-  Job-CMOYAO : .NET 7.0.0 (7.0.22.51805), X64 RyuJIT
+  Job-HLRTXC : .NET 7.0.0 (7.0.22.51805), X64 RyuJIT
 
 MaxRelativeError=0.05
 
-|       Method |        Mean |     Error |    StdDev |  Gen 0 | Allocated |
-|------------- |------------:|----------:|----------:|-------:|----------:|
-|     GetByKey |    95.52 ns |  0.967 ns |  0.808 ns | 0.0038 |      32 B |
-|       SetKey | 2,016.63 ns | 27.825 ns | 21.724 ns | 0.0877 |     744 B |
-| GetKeyPrefix | 1,141.74 ns |  7.934 ns |  6.194 ns | 0.1888 |   1,592 B |
+|       Method |       Mean |    Error |    StdDev |     Median |  Gen 0 | Allocated |
+|------------- |-----------:|---------:|----------:|-----------:|-------:|----------:|
+|     GetByKey |   101.8 ns |  0.42 ns |   0.35 ns |   101.9 ns |      - |         - |
+|       SetKey | 1,185.5 ns | 58.77 ns | 105.98 ns | 1,136.6 ns | 0.0591 |     496 B |
+| GetKeyPrefix | 1,376.0 ns | 15.77 ns |  14.75 ns | 1,373.0 ns | 0.0095 |      88 B |
 
 ```
 Before running the benchmark above, 999,999 entities are stored by key.
@@ -230,6 +176,36 @@ Before running the benchmark above, 999,999 entities are stored by key.
 * GetByKey - Retreives a single entity by key
 * SetKey - Updates an entity by key
 * GetKeyPrefix - Performs a prefix search to retreive a small number of elements
+
+## *Sample output from running VestPocket.ConsoleTest*
+```console
+---------Running VestPocket---------
+
+--Save Entities (threads:1000, iterations:1000)--
+Throughput 543134/s
+Latency Median: 1.865900 Max:1.827651
+
+--Read Entities (threads:1000, iterations:1000)--
+Throughput 25468428/s
+Latency Median: 0.000700 Max:0.001047
+
+--Prefix Search (threads:1000, iterations:1000)--
+Throughput 1545259/s
+Latency Median: 0.001400 Max:0.552880
+
+--Read and Write Mix (threads:1000, iterations:1000)--
+Throughput 281886/s
+Latency Median: 3.444500 Max:3.546834
+S
+-----Transaction Metrics-------------
+Count: 3000000
+Validation Time: 1.8us
+Serialization Time: 1.2us
+Serialized Bytes: 298680095
+Queue Length: 2994
+```
+
+BenchmarkDotNet tests are great for testing the timing and overhead of individual operations, but are less useful for showing the impact of a library or system when under load from many asynchronous requests at a time. VestPocket.ConsoleTest contains a rudementary test that attempts to measure the requests per second of various VestPocket methods. The 'Read and Write Mix' performs two save operations and gets four values by key.
 
 
 # VestPocketOptions
@@ -242,4 +218,4 @@ Before running the benchmark above, 999,999 entities are stored by key.
     await store.OpenAsync(CancellationToken.None);
 ```
 
-If you open a store with the ReadOnly option, then write operations will throw exceptions, and getting entities from the store will have improved performance (threading primitives to coordinate safe reading and writing can be skipped).
+If you open a store with the ReadOnly option, then write operations will throw exceptions.

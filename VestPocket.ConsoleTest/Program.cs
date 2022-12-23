@@ -15,9 +15,9 @@ class Program
 
     static async Task Main(string[] args)
     {
-        RemoveDatabaseFiles();
+        RemoveDatabaseFile();
 
-        int threads = 100;
+        int threads = 1000;
         int iterations = 1000;
 
         Console.WriteLine("---------Running VestPocket---------");
@@ -64,6 +64,8 @@ class Program
         }, threads, iterations);
 
         await connection.ForceMaintenance();
+
+        Console.WriteLine();
         Console.WriteLine("-----Transaction Metrics-------------");
         Console.WriteLine($"Count: {connection.TransactionMetrics.Count}");
         Console.WriteLine($"Validation Time: {connection.TransactionMetrics.AverageValidationTime.TotalMicroseconds}us");
@@ -76,72 +78,11 @@ class Program
         connection.Dispose();
         Console.WriteLine();
 
-        Console.WriteLine("-----Running VestPocket ReadOnly-----");
-
-        var readOnlyConnection = new VestPocketStore<Entity>(SourceGenerationContext.Default.Entity, VestPocketOptions.DefaultReadOnly);
-        await readOnlyConnection.OpenAsync(CancellationToken.None);
-
-        await TimeIterations("Read Entities", (thread, i) =>
-        {
-            readOnlyConnection.Get<Entity>($"{thread}-{i}");
-            return Task.CompletedTask;
-        }, threads, iterations);
-
-        await TimeIterations("Prefix Search", (thread, i) =>
-        {
-            using var prefixSearch = readOnlyConnection.GetByPrefix<Entity>(thread.ToString() + "-99");
-            foreach (var result in prefixSearch.Results)
-            {
-                if (result == null)
-                {
-                    throw new Exception("Failed");
-                }
-            }
-            return Task.CompletedTask;
-        }, threads, iterations);
-        readOnlyConnection.Close(CancellationToken.None).Wait();
-        readOnlyConnection.Dispose();
-
-        Console.WriteLine();
-
-        Console.WriteLine("----Running ConcurrentDictionary----");
-
-        ConcurrentDictionary<string, Entity> dictionary = new();
-        await TimeIterations("ConcurrentDictionary Save Entities", (thread, i) =>
-        {
-            var entity = new Entity($"{thread}-{i}", 0, false, $"""Just some body text {thread}-{i}""");
-            dictionary.AddOrUpdate(entity.Key, entity, (k, e) => e);
-            return Task.CompletedTask;
-        }, threads, iterations);
-
-        await TimeIterations("ConcurrentDictionary Read Entities", (thread, i) =>
-        {
-            var key = $"{thread}-{i}";
-            dictionary.TryGetValue(key, out var entity);
-            return Task.CompletedTask;
-        }, threads, iterations);
-
-        await TimeIterations("ConcurrentDictionary Read and Write Mix", (thread, i) =>
-        {
-            string key = $"{thread}-{i}";
-            if (dictionary.TryGetValue(key, out var entity))
-            {
-                dictionary.AddOrUpdate(entity.Key, entity, (k, e) => e);
-                dictionary.TryGetValue(key, out entity);
-                dictionary.TryGetValue(key, out entity);
-                dictionary.AddOrUpdate(entity.Key, entity, (k, e) => e);
-                dictionary.TryGetValue(key, out entity);
-                dictionary.TryGetValue(key, out entity);
-            }
-            return Task.CompletedTask;
-        }, threads, iterations);
-        Console.WriteLine();
-
-        RemoveDatabaseFiles();
+        RemoveDatabaseFile();
 
     }
 
-    private static void RemoveDatabaseFiles()
+    private static void RemoveDatabaseFile()
     {
         var fileName = VestPocketOptions.Default.FilePath;
         if (System.IO.File.Exists(fileName))
