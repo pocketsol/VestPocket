@@ -1,9 +1,3 @@
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Runtime.CompilerServices;
-using System.Threading.Tasks;
-
 namespace VestPocket;
 
 /// <summary>
@@ -12,7 +6,6 @@ namespace VestPocket;
 /// <typeparam name="T">The entity stored within this node</typeparam>
 internal class Node<T> where T : class, IEntity
 {
-    public Node<T> Parent = null;
     public string KeySegment;
     public Node<T>[] Children;
     public T Value;
@@ -22,9 +15,8 @@ internal class Node<T> where T : class, IEntity
         this.KeySegment = String.Empty;
     }
 
-    public Node(Node<T> parent, string label)
+    public Node(string label)
     {
-        this.Parent = parent;
         this.KeySegment = label;
     }
 
@@ -32,7 +24,7 @@ internal class Node<T> where T : class, IEntity
     {
 
         // Set on a child
-        var matchingChild = FindMatchingChild(key, out var matchingLength);
+        var matchingChild = FindMatchingChild(key, out var matchingLength, out var matchingIndex);
         if (matchingChild != null)
         {
             if (matchingLength == key.Length)
@@ -49,7 +41,9 @@ internal class Node<T> where T : class, IEntity
                     // https://en.wikipedia.org/wiki/Radix_tree#/media/File:Inserting_the_word_'team'_into_a_Patricia_trie_with_a_split.png
 
                     // We matched the whole set key, but not the entire child key. We need to split the child key
-                    matchingChild.SplitKeySegmentAtLength(matchingLength);
+                    //matchingChild.SplitKeySegmentAtLength(matchingLength);
+                    SplitChild(matchingLength, matchingIndex);
+                    matchingChild = Children[matchingIndex];
                     matchingChild.SetValue(key.Slice(matchingLength), value);
                 }
 
@@ -65,7 +59,9 @@ internal class Node<T> where T : class, IEntity
                 else
                 {
                     // and only part of the child key
-                    matchingChild.SplitKeySegmentAtLength(matchingLength);
+                    //matchingChild.SplitKeySegmentAtLength(matchingLength);
+                    SplitChild(matchingLength, matchingIndex);
+                    matchingChild = Children[matchingIndex];
                     matchingChild.SetValue(key.Slice(matchingLength), value);
                 }                    
             }
@@ -74,8 +70,8 @@ internal class Node<T> where T : class, IEntity
         {
             // There were no matching children. 
             // E.g. Key = "apple" and no child that even starts with 'a'. Add a new child node
-            string keySegment = new string( key.Slice(0));
-            var newChild = new Node<T>(this, keySegment);
+            string keySegment = new string( key );
+            var newChild = new Node<T>(keySegment);
             newChild.Value = value;
 
             AddChild(newChild);
@@ -87,41 +83,41 @@ internal class Node<T> where T : class, IEntity
     {
         if (Children == null)
         {
-            Children = new Node<T>[1];
+            var newChildArray = new Node<T>[1] { newChild };
+            Children = newChildArray;
         }
         else
         {
-            Array.Resize(ref Children, Children.Length + 1);
+            var newLength = Children.Length + 1;
+            var newChildArray = new Node<T>[newLength];
+            Array.Copy(Children, newChildArray, Children.Length);
+            newChildArray[^1] = newChild;
+            Children = newChildArray;
         }
-        Children[^1] = newChild;
     }
 
-    public void SplitKeySegmentAtLength(int startingCharacter)
+    private void SplitChild(int startingCharacter, int childIndex)
     {
-        // Create new split child
-        var newChildKeySegment = KeySegment.Substring(startingCharacter);
-        var newChild = new Node<T>(this, newChildKeySegment) { Value = this.Value };
+        var child = Children[childIndex];
+        // We are taking a child node and splitting it at a specific number of
+        // characters in its key segment
 
-        this.Value = null;
-        if (Children == null) {
-            AddChild(newChild);
-        }
-        else
-        {
+        // E.g.
+        // We have nodes A => BC => etc...
+        // and we want A => B => C => etc..
+        // A is the current 'this' node of this method
+        // BC is the original child node
+        // B is the splitParent, and gets a null value
+        // C is the new splitChild, it retains the original value and children of the 'BC' node
 
-            //push existing children down
-            newChild.Children = Children;
-            for(int i = 0; i < newChild.Children.Length; i++)
-            {
-                Children[i].Parent = newChild;
-            }
-            this.Children = null;
-            AddChild(newChild);
-        }
+        var splitChildKey = child.KeySegment.Substring(startingCharacter);
+        var splitChild = new Node<T>() { KeySegment = splitChildKey, Value = child.Value };
+        splitChild.Children = child.Children;
 
-        // Change this nodes segment to portion that wasn't cutoff
-        KeySegment = KeySegment.Substring(0, startingCharacter);
+        var splitParentKey = child.KeySegment.Substring(0, startingCharacter);
+        var splitParent = new Node<T>(splitParentKey) { Children = new Node<T>[] {splitChild} };
 
+        Children[childIndex] = splitParent;
     }
 
     public Node<T> GetValue(ReadOnlySpan<char> key)
@@ -162,7 +158,6 @@ internal class Node<T> where T : class, IEntity
         return null;
     }
 
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public void GetValuesByPrefix<TSelection>(ReadOnlySpan<char> key, PrefixResult<TSelection> result) where TSelection : class, T
     {
         if (Children != null)
@@ -235,70 +230,26 @@ internal class Node<T> where T : class, IEntity
     /// <param name="keySegment"></param>
     /// <param name="result">The matching child node</param>
     /// <returns>The number of matching bytes</returns>
-    private Node<T> FindMatchingChild(ReadOnlySpan<char> keySegment, out int bytesMatching)
+    private Node<T> FindMatchingChild(ReadOnlySpan<char> keySegment, out int bytesMatching, out int matachingIndex)
     {
         if (Children != null)
         {
-            foreach(var child in Children)
+            for (int i = 0; i < Children.Length; i++)
             {
+                Node<T> child = Children[i];
                 var matchingBytes = keySegment.CommonPrefixLength(child.KeySegment);
 
                 if (matchingBytes > 0)
                 {
                     bytesMatching = matchingBytes;
+                    matachingIndex = i;
                     return child;
                 }
             }
         }
         bytesMatching = 0;
+        matachingIndex = -1;
         return null;
-    }
-
-    private void RemoveChild(Node<T> child)
-    {
-        Children = Children.Where(x => x != child).ToArray();
-    }
-
-    public void RemoveValue()
-    {
-        Value = null;
-        if (Children == null)
-        {
-            if (Parent!.Children!.Length == 1)
-            {
-                Parent.Children = null;
-            }
-            else
-            {
-                Parent.RemoveChild(this);
-            }
-        }
-        else
-        {
-            TryMergeChild();
-            var parent = Parent;
-            while (parent != null)
-            {
-                if (!parent.TryMergeChild())
-                {
-                    break;
-                }
-                parent = parent.Parent;
-            }
-        }
-    }
-
-    public bool TryMergeChild()
-    {
-        if (Children != null && Children.Length == 1)
-        {
-            var child = Children[0];
-            Value = child.Value;
-            Children = child.Children;
-            KeySegment = KeySegment + child.KeySegment;
-            return true;
-        }
-        return false;
     }
 
     public int GetChildrenCount()

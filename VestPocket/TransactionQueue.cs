@@ -62,11 +62,9 @@ internal class TransactionQueue<TBaseType> where TBaseType : class, IEntity
                 Transaction<TBaseType> transaction = await queueItemChannel.Reader.ReadAsync(cancellationToken);
                 this.Metrics.queueWaits++;
                 sw.Restart();
-                memoryStore.Lock();
-                this.Metrics.acquiringWriteLockTime += sw.Elapsed;
-                sw.Restart();
                 do
                 {
+
                     var appliedInMemory = memoryStore.ProcessTransaction(transaction);
                     this.Metrics.validationTime += sw.Elapsed;
 
@@ -79,7 +77,6 @@ internal class TransactionQueue<TBaseType> where TBaseType : class, IEntity
                     this.Metrics.count++;
 
                 } while (queueItemChannel.Reader.TryRead(out transaction));
-                memoryStore.Unlock();
             }
         } 
         catch (OperationCanceledException)
@@ -90,6 +87,10 @@ internal class TransactionQueue<TBaseType> where TBaseType : class, IEntity
 
     public void Enqueue(Transaction<TBaseType> transaction)
     {
+        if (transaction.Entity == null && transaction.Entities == null)
+        {
+            ;
+        }
         if (!queueItemChannel.Writer.TryWrite(transaction))
         {
             if (processQueuesCancellationTokenSource.IsCancellationRequested)

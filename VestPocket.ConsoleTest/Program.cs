@@ -1,278 +1,204 @@
-﻿using VestPocket;
-using System;
-using System.Collections.Generic;
+﻿using System;
 using System.Diagnostics;
 using System.Linq;
-using System.Runtime.CompilerServices;
-using System.Text.Json.Serialization;
 using System.Threading;
 using System.Threading.Tasks;
-using LiteDB;
 using System.Collections.Concurrent;
 
-namespace VestPocket.ConsoleTest
+namespace VestPocket.ConsoleTest;
+
+
+class Program
 {
+    static VestPocketStore<Entity> connection;
 
 
-    class Program
+    static async Task Main(string[] args)
     {
-        static VestPocketStore<Entity> connection;
+        RemoveDatabaseFiles();
 
+        int threads = 100;
+        int iterations = 1000;
 
-        static async Task Main(string[] args)
+        Console.WriteLine("---------Running VestPocket---------");
+
+        var options = new VestPocketOptions();
+        options.CompressOnRewrite = true;
+
+        connection = new VestPocketStore<Entity>(SourceGenerationContext.Default.Entity, options);
+        await connection.OpenAsync(CancellationToken.None);
+
+        await TimeIterations("Save Entities", async (thread, i) =>
         {
-            RemoveDatabaseFiles();
+            await connection.Save(new Entity($"{thread}-{i}", 0, false, $"""Just some body text {thread}-{i}"""));
+        }, threads, iterations);
 
-            int threads = 100;
-            int iterations = 1000;
+        await TimeIterations("Read Entities", (thread, i) =>
+        {
+            connection.Get<Entity>($"{thread}-{i}");
+            return Task.CompletedTask;
+        }, threads, iterations);
 
-            Console.WriteLine("---------Running VestPocket---------");
-
-            var options = new VestPocketOptions();
-            options.CompressOnRewrite = true;
-
-            connection = new VestPocketStore<Entity>(SourceGenerationContext.Default.Entity, options);
-            await connection.OpenAsync(CancellationToken.None);
-
-            await TimeIterations("Save Entities", async (thread, i) =>
+        await TimeIterations("Prefix Search", (thread, i) =>
+        {
+            using var prefixSearch = connection.GetByPrefix<Entity>(thread.ToString() + "-99");
+            foreach (var result in prefixSearch.Results)
             {
-                await connection.Save(new Entity($"{thread}-{i}", 0, false, $"""Just some body text {thread}-{i}"""));
-            }, threads, iterations);
-
-            await TimeIterations("Read Entities", (thread, i) =>
-            {
-                connection.Get<Entity>($"{thread}-{i}");
-                return Task.CompletedTask;
-            }, threads, iterations);
-
-            await TimeIterations("Prefix Search", (thread, i) =>
-            {
-                using var prefixSearch = connection.GetByPrefix<Entity>(thread.ToString() + "-99");
-                foreach (var result in prefixSearch.Results)
+                if (result == null)
                 {
-                    if (result == null)
-                    {
-                        throw new Exception("Failed");
-                    }
+                    throw new Exception("Failed");
                 }
-                return Task.CompletedTask;
-            }, threads, iterations);
+            }
+            return Task.CompletedTask;
+        }, threads, iterations);
 
-            await TimeIterations("Read and Write Mix", async (thread, i) =>
+        await TimeIterations("Read and Write Mix", async (thread, i) =>
+        {
+            var entity = connection.Get<Entity>($"{thread}-{i}");
+            await connection.Save(entity);
+            entity = connection.Get<Entity>($"{thread}-{i}");
+            entity = connection.Get<Entity>($"{thread}-{i}");
+            entity = await connection.Save(entity);
+            entity = connection.Get<Entity>($"{thread}-{i}");
+            entity = connection.Get<Entity>($"{thread}-{i}");
+        }, threads, iterations);
+
+        await connection.ForceMaintenance();
+        Console.WriteLine("-----Transaction Metrics-------------");
+        Console.WriteLine($"Count: {connection.TransactionMetrics.Count}");
+        Console.WriteLine($"Validation Time: {connection.TransactionMetrics.AverageValidationTime.TotalMicroseconds}us");
+        Console.WriteLine($"Serialization Time: {connection.TransactionMetrics.AverageSerializationTime.TotalMicroseconds}us");
+        Console.WriteLine($"Serialized Bytes: {connection.TransactionMetrics.BytesSerialized}");
+
+        Console.WriteLine($"Queue Length: {connection.TransactionMetrics.AverageQueueLength}");
+
+        await connection.Close(CancellationToken.None);
+        connection.Dispose();
+        Console.WriteLine();
+
+        Console.WriteLine("-----Running VestPocket ReadOnly-----");
+
+        var readOnlyConnection = new VestPocketStore<Entity>(SourceGenerationContext.Default.Entity, VestPocketOptions.DefaultReadOnly);
+        await readOnlyConnection.OpenAsync(CancellationToken.None);
+
+        await TimeIterations("Read Entities", (thread, i) =>
+        {
+            readOnlyConnection.Get<Entity>($"{thread}-{i}");
+            return Task.CompletedTask;
+        }, threads, iterations);
+
+        await TimeIterations("Prefix Search", (thread, i) =>
+        {
+            using var prefixSearch = readOnlyConnection.GetByPrefix<Entity>(thread.ToString() + "-99");
+            foreach (var result in prefixSearch.Results)
             {
-                var entity = connection.Get<Entity>($"{thread}-{i}");
-                await connection.Save(entity);
-                entity = connection.Get<Entity>($"{thread}-{i}");
-                entity = connection.Get<Entity>($"{thread}-{i}");
-                entity = await connection.Save(entity);
-                entity = connection.Get<Entity>($"{thread}-{i}");
-                entity = connection.Get<Entity>($"{thread}-{i}");
-            }, threads, iterations);
-
-            await connection.ForceMaintenance();
-            Console.WriteLine("-----Transaction Metrics-------------");
-            Console.WriteLine($"Count: {connection.TransactionMetrics.Count}");
-            Console.WriteLine($"Locking Time: {connection.TransactionMetrics.AverageAquiringWriteLockTime.TotalMicroseconds}us");
-            Console.WriteLine($"Validation Time: {connection.TransactionMetrics.AverageValidationTime.TotalMicroseconds}us");
-            Console.WriteLine($"Serialization Time: {connection.TransactionMetrics.AverageSerializationTime.TotalMicroseconds}us");
-            Console.WriteLine($"Serialized Bytes: {connection.TransactionMetrics.BytesSerialized}");
-
-            Console.WriteLine($"Queue Length: {connection.TransactionMetrics.AverageQueueLength}");
-
-            await connection.Close(CancellationToken.None);
-            connection.Dispose();
-            Console.WriteLine();
-
-            Console.WriteLine("-----Running VestPocket ReadOnly-----");
-
-            var readOnlyConnection = new VestPocketStore<Entity>(SourceGenerationContext.Default.Entity, VestPocketOptions.DefaultReadOnly);
-            await readOnlyConnection.OpenAsync(CancellationToken.None);
-
-            await TimeIterations("Read Entities", (thread, i) =>
-            {
-                readOnlyConnection.Get<Entity>($"{thread}-{i}");
-                return Task.CompletedTask;
-            }, threads, iterations);
-
-            await TimeIterations("Prefix Search", (thread, i) =>
-            {
-                using var prefixSearch = readOnlyConnection.GetByPrefix<Entity>(thread.ToString() + "-99");
-                foreach (var result in prefixSearch.Results)
+                if (result == null)
                 {
-                    if (result == null)
-                    {
-                        throw new Exception("Failed");
-                    }
+                    throw new Exception("Failed");
                 }
-                return Task.CompletedTask;
-            }, threads, iterations);
-            readOnlyConnection.Close(CancellationToken.None).Wait();
-            readOnlyConnection.Dispose();
+            }
+            return Task.CompletedTask;
+        }, threads, iterations);
+        readOnlyConnection.Close(CancellationToken.None).Wait();
+        readOnlyConnection.Dispose();
 
-            Console.WriteLine();
+        Console.WriteLine();
 
-            Console.WriteLine("----Running ConcurrentDictionary----");
+        Console.WriteLine("----Running ConcurrentDictionary----");
 
-            ConcurrentDictionary<string, Entity> dictionary = new();
-            await TimeIterations("ConcurrentDictionary Save Entities", (thread, i) =>
+        ConcurrentDictionary<string, Entity> dictionary = new();
+        await TimeIterations("ConcurrentDictionary Save Entities", (thread, i) =>
+        {
+            var entity = new Entity($"{thread}-{i}", 0, false, $"""Just some body text {thread}-{i}""");
+            dictionary.AddOrUpdate(entity.Key, entity, (k, e) => e);
+            return Task.CompletedTask;
+        }, threads, iterations);
+
+        await TimeIterations("ConcurrentDictionary Read Entities", (thread, i) =>
+        {
+            var key = $"{thread}-{i}";
+            dictionary.TryGetValue(key, out var entity);
+            return Task.CompletedTask;
+        }, threads, iterations);
+
+        await TimeIterations("ConcurrentDictionary Read and Write Mix", (thread, i) =>
+        {
+            string key = $"{thread}-{i}";
+            if (dictionary.TryGetValue(key, out var entity))
             {
-                var entity = new Entity($"{thread}-{i}", 0, false, $"""Just some body text {thread}-{i}""");
                 dictionary.AddOrUpdate(entity.Key, entity, (k, e) => e);
-                return Task.CompletedTask;
-            }, threads, iterations);
-
-            await TimeIterations("ConcurrentDictionary Read Entities", (thread, i) =>
-            {
-                var key = $"{thread}-{i}";
-                dictionary.TryGetValue(key, out var entity);
-                return Task.CompletedTask;
-            }, threads, iterations);
-
-            await TimeIterations("ConcurrentDictionary Read and Write Mix", (thread, i) =>
-            {
-                string key = $"{thread}-{i}";
-                if (dictionary.TryGetValue(key, out var entity))
-                {
-                    dictionary.AddOrUpdate(entity.Key, entity, (k, e) => e);
-                    dictionary.TryGetValue(key, out entity);
-                    dictionary.TryGetValue(key, out entity);
-                    dictionary.AddOrUpdate(entity.Key, entity, (k, e) => e);
-                    dictionary.TryGetValue(key, out entity);
-                    dictionary.TryGetValue(key, out entity);
-                }
-                return Task.CompletedTask;
-            }, threads, iterations);
-            Console.WriteLine();
-
-            Console.WriteLine("----------Running LiteDb-------------");
-            using (var db = new LiteDatabase(@"LiteDb.db"))
-            {
-                var col = db.GetCollection<LiteDbEntity>("customers");
-                col.EnsureIndex(x => x.Key);
-
-                await TimeIterations("LiteDb Save Entities", (thread, i) =>
-                {
-                    string key = $"{thread}-{i}";
-                    string body = $"""Just some body text {thread}-{i}""";
-                    col.Insert(new LiteDbEntity { Key = key, Body = body });
-                    return Task.CompletedTask;
-                }, threads, iterations);
-
-                await TimeIterations("LiteDb Read Entities", (thread, i) =>
-                {
-                    string key = $"{thread}-{i}";
-                    col.FindOne(x => x.Key == key);
-                    return Task.CompletedTask;
-                }, threads, iterations);
-
-                await TimeIterations("LiteDb Prefix Search", (thread, i) =>
-                {
-                    string startsWith = thread.ToString() + "-99";
-                    var query = col.Query().Where(x => x.Key.StartsWith(startsWith)).ToList();
-                    foreach (var item in query)
-                    {
-                        if (item == null)
-                        {
-                            throw new Exception("Failed");
-                        }
-                    }
-                    return Task.CompletedTask;
-                }, threads, iterations);
-
-                await TimeIterations("LiteDb Read and Write Mix", (thread, i) =>
-                {
-                    string key = $"{thread}-{i}";
-                    var entity = col.FindOne(x => x.Key == key);
-                    col.Update(entity);
-                    entity = col.FindOne(x => x.Key == key);
-                    entity = col.FindOne(x => x.Key == key);
-                    col.Update(entity);
-                    entity = col.FindOne(x => x.Key == key);
-                    entity = col.FindOne(x => x.Key == key);
-                    return Task.CompletedTask;
-                }, threads, iterations);
-
+                dictionary.TryGetValue(key, out entity);
+                dictionary.TryGetValue(key, out entity);
+                dictionary.AddOrUpdate(entity.Key, entity, (k, e) => e);
+                dictionary.TryGetValue(key, out entity);
+                dictionary.TryGetValue(key, out entity);
             }
+            return Task.CompletedTask;
+        }, threads, iterations);
+        Console.WriteLine();
 
-            RemoveDatabaseFiles();
-
-        }
-
-        private static void RemoveDatabaseFiles()
-        {
-            var fileName = VestPocketOptions.Default.FilePath;
-            if (System.IO.File.Exists(fileName))
-            {
-                System.IO.File.Delete(fileName);
-            }
-
-            if (System.IO.File.Exists("LiteDb.db"))
-            {
-                System.IO.File.Delete("LiteDb.db");
-            }
-        }
-
-        /// <summary>
-        /// This is smaller than the 'Entity' class, as it is a more fair comparison.
-        /// LiteDb doesn't need or use 'Version' or 'Deleted' fields.
-        /// </summary>
-        public class LiteDbEntity
-        {
-            [BsonId]
-            public string Key { get; set; }
-            public string Body { get; set; }
-        }
-
-
-        private static async Task TimeIterations(string activityName, Func<int, int, Task> toDo, int threads, int iterations)
-        {
-            var stopwatch = new Stopwatch();
-            stopwatch.Start();
-
-            var tasks = new Task[threads];
-            var threadLatencyAverages = new double[threads];
-            var threadLatencyMaxes = new double[threads];
-            var threadLatencyMedian = new double[threads];
-
-            for(int threadI = 0; threadI < threads; threadI++)
-            {
-                var threadCount = threadI;
-                tasks[threadI] = Task.Run(async () =>
-                {
-                    var taskLatencies = new double[iterations];
-                    Stopwatch sw = new Stopwatch();
-                    for (int iterationCount = 0; iterationCount < iterations; iterationCount++)
-                    {
-                        sw.Start();
-                        var threadCountI = threadCount;
-                        var iterationI = iterationCount;
-                        await toDo(threadCountI, iterationI);
-                        sw.Stop();
-                        taskLatencies[iterationCount] = sw.Elapsed.TotalMilliseconds;
-                        sw.Reset();
-                    }
-                    threadLatencyAverages[threadCount] = taskLatencies.Average();
-                    threadLatencyMaxes[threadCount] = taskLatencies.Max();
-                    var halfIndex = iterations / 2;
-                    threadLatencyMedian[threadCount] = taskLatencies[halfIndex];
-                });
-            }
-
-            await Task.WhenAll(tasks);
-            stopwatch.Stop();
-            var elapsed = stopwatch.Elapsed;
-
-            var totalIterations = threads * iterations;
-            var throughput = totalIterations / elapsed.TotalSeconds;
-
-            var threadMedianSorted = threadLatencyMedian.AsEnumerable().OrderBy(x => x).ToList();
-
-            var overallMedian = threadMedianSorted[threadMedianSorted.Count / 2];
-            Console.WriteLine();
-            Console.WriteLine($"--{activityName} (threads:{threads}, iterations:{iterations})--");
-            Console.WriteLine($"Throughput {throughput.ToString("F0")}/s");
-            Console.WriteLine($"Latency Median: {overallMedian.ToString("N6")} Max:{threadLatencyAverages.Max().ToString("N6")}");
-        }
+        RemoveDatabaseFiles();
 
     }
+
+    private static void RemoveDatabaseFiles()
+    {
+        var fileName = VestPocketOptions.Default.FilePath;
+        if (System.IO.File.Exists(fileName))
+        {
+            System.IO.File.Delete(fileName);
+        }
+    }
+
+
+    private static async Task TimeIterations(string activityName, Func<int, int, Task> toDo, int threads, int iterations)
+    {
+        var stopwatch = new Stopwatch();
+        stopwatch.Start();
+
+        var tasks = new Task[threads];
+        var threadLatencyAverages = new double[threads];
+        var threadLatencyMaxes = new double[threads];
+        var threadLatencyMedian = new double[threads];
+
+        for(int threadI = 0; threadI < threads; threadI++)
+        {
+            var threadCount = threadI;
+            tasks[threadI] = Task.Run(async () =>
+            {
+                var taskLatencies = new double[iterations];
+                Stopwatch sw = new Stopwatch();
+                for (int iterationCount = 0; iterationCount < iterations; iterationCount++)
+                {
+                    sw.Start();
+                    var threadCountI = threadCount;
+                    var iterationI = iterationCount;
+                    await toDo(threadCountI, iterationI);
+                    sw.Stop();
+                    taskLatencies[iterationCount] = sw.Elapsed.TotalMilliseconds;
+                    sw.Reset();
+                }
+                threadLatencyAverages[threadCount] = taskLatencies.Average();
+                threadLatencyMaxes[threadCount] = taskLatencies.Max();
+                var halfIndex = iterations / 2;
+                threadLatencyMedian[threadCount] = taskLatencies[halfIndex];
+            });
+        }
+
+        await Task.WhenAll(tasks);
+        stopwatch.Stop();
+        var elapsed = stopwatch.Elapsed;
+
+        var totalIterations = threads * iterations;
+        var throughput = totalIterations / elapsed.TotalSeconds;
+
+        var threadMedianSorted = threadLatencyMedian.AsEnumerable().OrderBy(x => x).ToList();
+
+        var overallMedian = threadMedianSorted[threadMedianSorted.Count / 2];
+        Console.WriteLine();
+        Console.WriteLine($"--{activityName} (threads:{threads}, iterations:{iterations})--");
+        Console.WriteLine($"Throughput {throughput.ToString("F0")}/s");
+        Console.WriteLine($"Latency Median: {overallMedian.ToString("N6")} Max:{threadLatencyAverages.Max().ToString("N6")}");
+    }
+
 }

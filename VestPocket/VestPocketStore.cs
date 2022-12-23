@@ -184,7 +184,6 @@ public class VestPocketStore<TEntity> : IDisposable where TEntity : class, IEnti
     public void Clear()
     {
         EnsureWriteAccess();
-        this.entityStore.Lock();
         try
         {
             this.entityStore.RemoveAllDocuments();
@@ -192,7 +191,6 @@ public class VestPocketStore<TEntity> : IDisposable where TEntity : class, IEnti
         }
         finally
         {
-            this.entityStore.Unlock();
         }
     }
 

@@ -4,7 +4,6 @@ namespace VestPocket;
 public class PrefixResult<TSelection> : IDisposable where TSelection : class, IEntity
 {
     private TSelection[] buffer;
-    private int size = 1024;
     private int length = 0;
     private static readonly ArrayPool<TSelection> pool = ArrayPool<TSelection>.Create();
     private readonly string keyPrefix;
@@ -16,7 +15,6 @@ public class PrefixResult<TSelection> : IDisposable where TSelection : class, IE
 
     public void SetSize(int size)
     {
-        this.size = size;
         buffer = pool.Rent(size);
         length = 0;
     }

@@ -20,36 +20,16 @@ internal class EntityStore<T> where T : class, IEntity
     }
 
     /// <summary>
-    /// Locks the underlying <see cref="PrefixLookup{T}"/> for changes.
-    /// Exists so that an owning type (such as an <see cref="TransactionQueue{TBaseType}"/> ) can have fine-grained control over locking semantics while processing transaction.
-    /// </summary>
-    public void Lock()
-    {
-        lookup.Lock();
-    }
-
-    /// <summary>
-    /// Temporarily locks and allows changes to this entity store.
+    /// Temporarily allows changes to this entity store.
     /// Useful to load the initial records from disk.
     /// </summary>
     internal void BeginLoading()
     {
-        Lock();
         lookup.ReadOnly = false;
     }
 
     internal void EndLoading() { 
-        Unlock();
         lookup.ReadOnly = this.readOnly;
-    }
-
-    /// <summary>
-    /// Releases the write lock on the underlying <see cref="PrefixLookup{T}"/>.
-    /// Exists so that an owning type (such as an <see cref="TransactionQueue{TBaseType}"/> ) can have fine-grained control over locking semantics while processing transaction.
-    /// </summary>
-    public void Unlock() 
-    {
-        lookup.Unlock();
     }
 
     /// <summary>

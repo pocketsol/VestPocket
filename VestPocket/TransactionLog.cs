@@ -1,10 +1,8 @@
 ﻿using System.Diagnostics;
 using System.IO;
-using System.Runtime.CompilerServices;
 using System.Text.Json;
 using System.Text.Json.Serialization.Metadata;
 using System.IO.Compression;
-using System.Buffers;
 
 namespace VestPocket;
 
