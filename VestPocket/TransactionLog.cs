@@ -48,7 +48,7 @@ internal class TransactionLog<T> : IDisposable where T : class, IEntity
         this.options = options;
     }
 
-    private async Task Rewrite()
+    private async Task Rewrite(bool isBackup)
     {
         var itemsRewritten = 0;
 
@@ -94,8 +94,16 @@ internal class TransactionLog<T> : IDisposable where T : class, IEntity
 
         lock (writeLock)
         {
-            outputStream = swapRewriteStreamCallback(outputStream, rewriteStream);
-            rewriteTailBuffer.WriteTo(outputStream);
+            if (isBackup)
+            {
+                rewriteTailBuffer.WriteTo(stream);
+                stream.Close();
+            }
+            else
+            {
+                outputStream = swapRewriteStreamCallback(outputStream, rewriteStream);
+                rewriteTailBuffer.WriteTo(outputStream);
+            }
             rewriteTailBuffer.Dispose();
             rewriteStream = null;
             rewriteTailBuffer = null;
@@ -379,7 +387,7 @@ internal class TransactionLog<T> : IDisposable where T : class, IEntity
                     rewriteStream = rewriteStreamFactory();
 
                     memoryStore.ResetDeadSpace();
-                    rewriteTask = Task.Run(Rewrite);
+                    rewriteTask = Task.Run(() => Rewrite(false));
                 }
             }
 
@@ -416,10 +424,39 @@ internal class TransactionLog<T> : IDisposable where T : class, IEntity
                 rewriteTailBuffer = new MemoryStream();
                 rewriteStream = rewriteStreamFactory();
                 memoryStore.ResetDeadSpace();
-                rewriteTask = Task.Run(() => Rewrite());
+                rewriteTask = Task.Run(() => Rewrite(false));
             }
         }
         return rewriteTask;
+    }
+
+    public async Task CreateBackup(string filePath)
+    {
+        
+        while(true)
+        {
+            if (rewriteTask != null && !rewriteTask.IsCompleted)
+            {
+                await rewriteTask;
+            }
+
+            // We can't lock and start a backup rewrite when
+            // a rewrite is ongoing, but we also can't guarantee
+            // another thread won't start a rewrite after we await
+            // the rewrite task
+            lock (writeLock)
+            {
+                if (rewriteTask != null) continue;
+                rewriteTailBuffer = new MemoryStream();
+                rewriteStream = new FileStream(filePath, FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None);
+                rewriteTask = Task.Run(() => Rewrite(true));
+            }
+
+            await rewriteTask;
+            break;
+
+        }
+
     }
 
     private async IAsyncEnumerable<byte[]> GetCompressedRewriteSegments(PrefixResult<T> entities, [EnumeratorCancellation] CancellationToken cancellationToken)

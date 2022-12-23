@@ -1,4 +1,5 @@
 using System;
+using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 using Xunit;
@@ -187,5 +188,18 @@ public class VestPocketStoreTests : IClassFixture<VestPocketStoreFixture>
         await Assert.ThrowsAsync<Exception>(async () => await readonlyStore.Save(testDocument));
     }
 
+    [Fact]
+    public async Task Backup_CreatesBackupFile()
+    {
+        string filePath = "backup.db";
+        if (File.Exists(filePath)) File.Delete(filePath);
+        await testStore.Save(new TestDocument("SomeKey", 0, false, "SomeDoc"));
+        await testStore.CreateBackup(filePath);
+        var fileInfo = new FileInfo(filePath);
+        var fileSize = fileInfo.Length;
+        var fileNonEmpty = fileSize > 0;
+        File.Delete(filePath);
+        Assert.True(fileNonEmpty);
+    }
 
 }

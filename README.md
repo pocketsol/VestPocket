@@ -149,6 +149,21 @@ Because entities are stored in a single append-only file, periodically it needs 
 
 This involves writing all of the live records to a new temporary file. When new transactions come in during a file rewrite, they are both applied to the single file and buffered in memory. Once the temporary file creation is complete, new transactions are paused for a moment while the in memory transaction buffer is applied to the temporary file, and an atomic File.Move is used to swap the temporary file as the new data file.
 
+# Forcing Maintenance
+
+ ```csharp
+    await store.ForceMaintenance();
+```
+
+A rewrite can be forced by calling the method ForceMaintenance. If a rewrite is already ongoing, then this method will wait for the current rewrite to complete and will not start a new rewrite operation.
+
+# Backup
+ ```csharp
+    await store.CreateBackup("test.backup");
+```
+
+A Vest Pocket store can be backed up by calling the CreateBackup method. While a Vest Pocket store could be simply copied to another file using normal file conventions (System.IO, using scripts, or manually by the dev), using the CreateBackup method from code offers several advantages. The resulting file will be generated in a similar way to Rewriting: old versions of entities will be pruned, the CompressOnRewrite option will be honored, the Vest Pocket header row will contain updated meta data, and the resulting file will not contain partially written entities at the very end of the file.
+
 # Performance
 
 

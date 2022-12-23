@@ -200,6 +200,11 @@ public class VestPocketStore<TEntity> : IDisposable where TEntity : class, IEnti
         return transactionStore.ForceMaintenance();
     }
 
+    public Task CreateBackup(string filePath)
+    {
+        return transactionStore.CreateBackup(filePath);
+    }
+
     private async Task LoadRecordsFromStore(CancellationToken cancellationToken)
     {
         entityStore.BeginLoading();
