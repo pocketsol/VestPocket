@@ -127,6 +127,8 @@ internal class Node<T> where T : class, IEntity
 
         foreach (var child in Children)
         {
+            if (key[0] != child.KeySegment[0]) continue;
+
             var matchingBytes = key.CommonPrefixLength(child.KeySegment);
             //var matchingBytes = GetMatchingBytes(key, child.KeySegment);
 
@@ -164,6 +166,8 @@ internal class Node<T> where T : class, IEntity
         {
             foreach (var child in Children)
             {
+                if (key[0] != child.KeySegment[0]) continue;
+
                 var matchingCharacters = key.CommonPrefixLength(child.KeySegment);
                 if (matchingCharacters > 0)
                 {
@@ -237,6 +241,9 @@ internal class Node<T> where T : class, IEntity
             for (int i = 0; i < Children.Length; i++)
             {
                 Node<T> child = Children[i];
+
+                if (keySegment[0] != child.KeySegment[0]) continue;
+
                 var matchingBytes = keySegment.CommonPrefixLength(child.KeySegment);
 
                 if (matchingBytes > 0)
