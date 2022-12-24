@@ -17,8 +17,8 @@ class Program
     {
         RemoveDatabaseFile();
 
-        int threads = 1000;
-        int iterations = 1000;
+        int threads = 100;
+        int iterations = 10000;
 
         Console.WriteLine("---------Running VestPocket---------");
 

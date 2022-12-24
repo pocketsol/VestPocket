@@ -196,28 +196,28 @@ Before running the benchmark above, 999,999 entities are stored by key.
 ```console
 ---------Running VestPocket---------
 
---Save Entities (threads:1000, iterations:1000)--
-Throughput 543134/s
-Latency Median: 1.865900 Max:1.827651
+--Save Entities (threads:100, iterations:10000)--
+Throughput 624732/s
+Latency Median: 0.161000 Max:0.158181
 
---Read Entities (threads:1000, iterations:1000)--
-Throughput 25468428/s
-Latency Median: 0.000700 Max:0.001047
+--Read Entities (threads:100, iterations:10000)--
+Throughput 32959355/s
+Latency Median: 0.000800 Max:0.000462
 
---Prefix Search (threads:1000, iterations:1000)--
-Throughput 1545259/s
-Latency Median: 0.001400 Max:0.552880
+--Prefix Search (threads:100, iterations:10000)--
+Throughput 2006018/s
+Latency Median: 0.004100 Max:0.024440
 
---Read and Write Mix (threads:1000, iterations:1000)--
-Throughput 281886/s
-Latency Median: 3.444500 Max:3.546834
+--Read and Write Mix (threads:100, iterations:10000)--
+Throughput 318135/s
+Latency Median: 0.286700 Max:0.314295
 
 -----Transaction Metrics-------------
 Count: 3000000
-Validation Time: 1.8us
-Serialization Time: 1.2us
-Serialized Bytes: 298680095
-Queue Length: 2994
+Validation Time: 1.5us
+Serialization Time: 1.1us
+Serialized Bytes: 298734095
+Queue Length: 103
 ```
 
 BenchmarkDotNet tests are great for testing the timing and overhead of individual operations, but are less useful for showing the impact of a library or system when under load from many asynchronous requests at a time. VestPocket.ConsoleTest contains a rudementary test that attempts to measure the requests per second of various VestPocket methods. The 'Read and Write Mix' performs two save operations and gets four values by key.
