@@ -44,9 +44,9 @@ internal class TransactionQueue<TBaseType> where TBaseType : class, IEntity
 
     public async Task Stop()
     {
-            this.processQueuesCancellationTokenSource.Cancel();
-            this.queueItemChannel.Writer.Complete();
-            await processQueuesTask;
+        this.processQueuesCancellationTokenSource.Cancel();
+        this.queueItemChannel.Writer.Complete();
+        await processQueuesTask;
     }
 
     private async Task ProcessQueue()
@@ -78,7 +78,7 @@ internal class TransactionQueue<TBaseType> where TBaseType : class, IEntity
 
                 } while (queueItemChannel.Reader.TryRead(out transaction));
             }
-        } 
+        }
         catch (OperationCanceledException)
         {
         }

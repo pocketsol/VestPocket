@@ -18,7 +18,7 @@ class Program
         RemoveDatabaseFile();
 
         int threads = 100;
-        int iterations = 10000;
+        int iterations = 1000;
 
         Console.WriteLine("---------Running VestPocket---------");
 
@@ -27,6 +27,16 @@ class Program
 
         connection = new VestPocketStore<Entity>(SourceGenerationContext.Default.Entity, options);
         await connection.OpenAsync(CancellationToken.None);
+
+        await TimeIterations("Create Entities", (thread, i) =>
+        {
+            var entity = new Entity($"{thread}-{i}", 0, false, $"""Just some body text {thread}-{i}""");
+            if (entity == null)
+            {
+                throw new Exception();
+            }
+            return Task.CompletedTask;
+        }, threads, iterations);
 
         await TimeIterations("Save Entities", async (thread, i) =>
         {
@@ -37,6 +47,20 @@ class Program
         {
             connection.Get<Entity>($"{thread}-{i}");
             return Task.CompletedTask;
+        }, threads, iterations);
+
+        await TimeIterations("Save Entities Batched", async (thread, i) =>
+        {
+            if (i != 0)
+            {
+                return;
+            }
+            var entities = new Entity[iterations];
+            for(int j = 0; j < iterations; j++)
+            {
+                entities[j] = new Entity($"{thread}-{i}", 1, false, $"""Just some body text {thread}-{i}""");
+            }
+            await connection.Save(entities);
         }, threads, iterations);
 
         await TimeIterations("Prefix Search", (thread, i) =>
@@ -52,7 +76,7 @@ class Program
             return Task.CompletedTask;
         }, threads, iterations);
 
-        await TimeIterations("Read and Write Mix", async (thread, i) =>
+        await TimeIterations("Read and Write Mix (6 operations)", async (thread, i) =>
         {
             var entity = connection.Get<Entity>($"{thread}-{i}");
             await connection.Save(entity);

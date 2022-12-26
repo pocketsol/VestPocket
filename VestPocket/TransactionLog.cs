@@ -20,7 +20,6 @@ internal class TransactionLog<T> : IDisposable where T : class, IEntity
     private readonly EntityStore<T> memoryStore;
     private readonly JsonTypeInfo<T> jsonTypeInfo;
     private readonly VestPocketOptions options;
-    private Task flushTask;
     private int unflushed = 0;
     private readonly object writeLock = new();
     private Task rewriteTask;
@@ -28,6 +27,8 @@ internal class TransactionLog<T> : IDisposable where T : class, IEntity
 
     private MemoryStream rewriteTailBuffer;
     private Stream rewriteStream;
+
+    Thread flushThread;
 
     private StoreHeader header;
 
@@ -117,47 +118,49 @@ internal class TransactionLog<T> : IDisposable where T : class, IEntity
     {
         if (options.ReadOnly) { return; }
 
-        if (flushTask == null)
+        if (flushThread == null)
         {
-            flushTask = Task.Run(async () =>
-           {
-               while (!isDisposing)
-               {
-                   await Task.Delay(1000);
-
-                   if (unflushed > 0)
-                   {
-                       lock (writeLock)
-                       {
-                           if (unflushed == 0)
-                           {
-                               continue;
-                           }
-
-                           if (outputStream == null)
-                           {
-                               return;
-                           }
-                           if (outputStream is FileStream fileStream)
-                           {
-                               fileStream.Flush(true);
-                           }
-                           else
-                           {
-                               outputStream.Flush();
-                           }
-
-                           unflushed = 0;
-                       }
-                   }
-               }
-
-           });
+            flushThread = new Thread (PerformAutomaticFlushing);
+            flushThread.Start();
         }
 
     }
 
-    private async Task<long> GetNextLineFeedPosition(Stream stream, byte[] buffer)
+    private void PerformAutomaticFlushing()
+    {
+        while (!isDisposing)
+        {
+            Thread.Sleep(1000);
+
+            if (unflushed > 0)
+            {
+                lock (writeLock)
+                {
+                    if (unflushed == 0)
+                    {
+                        continue;
+                    }
+
+                    if (outputStream == null)
+                    {
+                        return;
+                    }
+                    if (outputStream is FileStream fileStream)
+                    {
+                        fileStream.Flush(true);
+                    }
+                    else
+                    {
+                        outputStream.Flush();
+                    }
+
+                    unflushed = 0;
+                }
+            }
+        }
+    }
+
+    private long GetNextLineFeedPosition(Stream stream, byte[] buffer)
     {
         long originalPosition = stream.Position;
         try
@@ -165,7 +168,7 @@ internal class TransactionLog<T> : IDisposable where T : class, IEntity
             int read;
             do
             {
-                read = await stream.ReadAsync(buffer);
+                read = stream.Read(buffer);
 
                 for (int i = 0; i < read; i++)
                 {
@@ -210,7 +213,7 @@ internal class TransactionLog<T> : IDisposable where T : class, IEntity
 
         if (outputStream.Length > 0)
         {
-            var firstLinePosition = await GetNextLineFeedPosition(outputStream, findNewLineBuffer);
+            var firstLinePosition = GetNextLineFeedPosition(outputStream, findNewLineBuffer);
             lineView.SetStream(outputStream, 0, firstLinePosition);
 
             this.header = await JsonSerializer.DeserializeAsync(lineView, InternalSerializationContext.Default.StoreHeader, cancellationToken);
@@ -256,7 +259,7 @@ internal class TransactionLog<T> : IDisposable where T : class, IEntity
                 break;
             }
 
-            var nextLineFeedPosition = await GetNextLineFeedPosition(stream, findNewLineBuffer);
+            var nextLineFeedPosition = GetNextLineFeedPosition(stream, findNewLineBuffer);
 
             if (nextLineFeedPosition == -1)
             {

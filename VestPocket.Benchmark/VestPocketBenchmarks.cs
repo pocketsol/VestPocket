@@ -11,6 +11,8 @@ public class VestPocketBenchmarks
     private string testKey = "123456";
     private Entity testDocument;
 
+    private Entity[] testDocuments = new Entity[10];
+
     public VestPocketBenchmarks()
     {
         SetupConnection();
@@ -34,6 +36,11 @@ public class VestPocketBenchmarks
         }
         Task.WaitAll(setResults);
         testDocument = store.Get<Entity>(testKey);
+
+        for(int i = 0; i < testDocuments.Length; i++)
+        {
+            testDocuments[i] = store.Get<Entity>(i.ToString());
+        }
     }
 
     [Benchmark]
@@ -46,6 +53,12 @@ public class VestPocketBenchmarks
     public async Task SetKey()
     {
         testDocument = await store.Save(testDocument);
+    }
+
+    [Benchmark]
+    public async Task SetTenPerTransaction()
+    {
+        testDocuments = await store.Save(testDocuments);
     }
 
     [Benchmark]
