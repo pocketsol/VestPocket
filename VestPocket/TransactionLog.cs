@@ -15,6 +15,7 @@ namespace VestPocket;
 internal class TransactionLog<T> : IDisposable where T : class, IEntity
 {
     private Stream outputStream;
+    private FileStream fileOutputStream;
     private readonly Func<Stream> rewriteStreamFactory;
     private readonly Func<Stream, Stream, Stream> swapRewriteStreamCallback;
     private readonly EntityStore<T> memoryStore;
@@ -42,6 +43,7 @@ internal class TransactionLog<T> : IDisposable where T : class, IEntity
         )
     {
         this.outputStream = outputStream;
+        this.fileOutputStream = outputStream as FileStream;
         this.rewriteStreamFactory = rewriteStreamFactory;
         this.swapRewriteStreamCallback = swapRewriteStreamCallback;
         this.memoryStore = memoryStore;
@@ -103,6 +105,7 @@ internal class TransactionLog<T> : IDisposable where T : class, IEntity
             else
             {
                 outputStream = swapRewriteStreamCallback(outputStream, rewriteStream);
+                fileOutputStream = outputStream as FileStream;
                 rewriteTailBuffer.WriteTo(outputStream);
             }
             rewriteTailBuffer.Dispose();

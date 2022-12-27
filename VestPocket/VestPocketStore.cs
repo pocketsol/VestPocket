@@ -123,19 +123,37 @@ public class VestPocketStore<TEntity> : IDisposable where TEntity : class, IEnti
     public async Task<TEntity[]> Save(TEntity[] entities)
     {
         EnsureWriteAccess();
-        var transaction = new Transaction<TEntity>(entities);
+        var transaction = new Transaction<TEntity>(entities, true);
         transactionQueue.Enqueue(transaction);
         await transaction.Task.ConfigureAwait(false);
         return transaction.Entities;
     }
 
+    public async Task<bool> TrySave<T>(T[] entities) where T : class, TEntity
+    {
+        EnsureWriteAccess();
+        var transaction = new Transaction<TEntity>(entities, false);
+        transactionQueue.Enqueue(transaction);
+        await transaction.Task.ConfigureAwait(false);
+        return !transaction.FailedConcurrency;
+    }
+
     public async Task<T> Save<T>(T entity) where T : class, TEntity
     {
         EnsureWriteAccess();
-        var transaction = new Transaction<TEntity>(entity);
+        var transaction = new Transaction<TEntity>(entity, true);
         transactionQueue.Enqueue(transaction);
         await transaction.Task.ConfigureAwait(false);
         return (T)transaction.Entity;
+    }
+
+    public async Task<bool> TrySave<T>(T entity) where  T : class, TEntity
+    {
+        EnsureWriteAccess();
+        var transaction = new Transaction<TEntity>(entity, false);
+        transactionQueue.Enqueue(transaction);
+        await transaction.Task.ConfigureAwait(false);
+        return !transaction.FailedConcurrency;
     }
 
     public T Get<T>(string key) where T : class, TEntity

@@ -121,12 +121,23 @@ public class VestPocketStoreTests : IClassFixture<VestPocketStoreFixture>
     }
 
     [Fact]
-    public async Task Set_FailsWithOldVersionDocument()
+    public async Task Save_FailsWithOldVersionDocument()
     {
         var key = "crud";
         var version1 = await testStore.Save(new TestDocument(key, 0, false, "doc1"));
         var version0 = version1 with { Version = 0 };
         await Assert.ThrowsAsync<ConcurrencyException>(async () => await testStore.Save(version0));
+    }
+
+    [Fact]
+    public async Task TrySave_ReturnsFalseWithOldVersionDocument()
+    {
+        var key = "crud";
+        var version1 = await testStore.Save(new TestDocument(key, 0, false, "doc1"));
+        var version0 = version1 with { Version = 0 };
+        var expectedTrySave = false;
+        var actualTrySave = await testStore.TrySave(version0);
+        Assert.Equal(expectedTrySave, actualTrySave);
     }
 
     [Fact]
@@ -158,12 +169,12 @@ public class VestPocketStoreTests : IClassFixture<VestPocketStoreFixture>
     }
 
     /// <summary>
-    /// Saves a document to the database, then performs a multi set that includes an update to the same document but with an
+    /// Saves a document to the database, then performs a multi save that includes an update to the same document but with an
     /// older version number. Expected result is a failure
     /// </summary>
     /// <returns></returns>
     [Fact]
-    public async Task Save_AllChangesRejectedOnAnyOldVersionDocument()
+    public async Task Save_MultipleChangesRejectedOnAnyOldVersionDocument()
     {
 
         var testDoc = await testStore.Save(new TestDocument("1", 0, false, "body1"));
@@ -178,6 +189,26 @@ public class VestPocketStoreTests : IClassFixture<VestPocketStoreFixture>
         };
 
         await Assert.ThrowsAsync<ConcurrencyException>(async() => await testStore.Save(changes));
+    }
+
+    [Fact]
+    public async Task TrySave_MultipleChangesRejectedOnAnyOldVersionDocument()
+    {
+
+        var testDoc = await testStore.Save(new TestDocument("1", 0, false, "body1"));
+
+        var docWithOldVersion = testDoc with { Version = 0 };
+
+        Entity[] changes = new Entity[]
+        {
+            docWithOldVersion,
+            new TestDocument("2", 0, false, "body2"),
+            new Entity("3", 0, false)
+        };
+        var expectedTrySave = false;
+        var actualTrySave = await testStore.TrySave(changes);
+
+        Assert.Equal(expectedTrySave, actualTrySave);
     }
 
     [Fact]

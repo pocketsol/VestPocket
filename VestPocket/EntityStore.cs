@@ -79,7 +79,14 @@ internal class EntityStore<T> where T : class, IEntity
                     )
                 {
                     transaction.Entity = existingDocument;
-                    transaction.SetError(new ConcurrencyException(entity.Key, entity.Version, existingDocument.Version));
+                    if (transaction.ThrowOnError)
+                    {
+                        transaction.SetError(new ConcurrencyException(entity.Key, entity.Version, existingDocument.Version));
+                    }
+                    else
+                    {
+                        transaction.TryFailed();
+                    }
                     return false;
                 }
                 deadEntityCount++;
@@ -111,7 +118,14 @@ internal class EntityStore<T> where T : class, IEntity
                         )
                     {
                         transaction.Entity = existingDocument;
-                        transaction.SetError(new ConcurrencyException(entity.Key, entity.Version, existingDocument.Version));
+                        if (transaction.ThrowOnError)
+                        {
+                            transaction.SetError(new ConcurrencyException(entity.Key, entity.Version, existingDocument.Version));
+                        }
+                        else
+                        {
+                            transaction.TryFailed();
+                        }
                         return false;
                     }
                     deadEntitiesInExisting++;

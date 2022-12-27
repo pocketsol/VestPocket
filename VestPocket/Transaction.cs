@@ -13,25 +13,34 @@ internal class Transaction<T> where T : IEntity
     private TaskCompletionSource taskCompletionSource = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
     private T entity;
     private T[] entities;
+    public bool FailedConcurrency { get; set; }
 
     public T Entity { get => entity; internal set => entity = value; }
     public T[] Entities { get => entities; internal set => entities = value; }
+    public bool ThrowOnError { get; }
 
-
-    public Transaction(T entity)
+    public Transaction(T entity, bool throwOnError)
     {
         Entity = entity;
+        ThrowOnError = throwOnError;
     }
 
-    public Transaction(T[] entities)
+    public Transaction(T[] entities, bool throwOnError)
     {
         Entities = entities;
+        ThrowOnError = throwOnError;
     }
 
     public bool IsSingleChange => this.Entity != null;
 
     public void Complete()
     {
+        this.taskCompletionSource.SetResult();
+    }
+
+    public void TryFailed()
+    {
+        FailedConcurrency = true;
         this.taskCompletionSource.SetResult();
     }
 
