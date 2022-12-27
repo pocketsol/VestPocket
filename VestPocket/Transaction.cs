@@ -19,6 +19,8 @@ internal class Transaction<T> where T : IEntity
     public T[] Entities { get => entities; internal set => entities = value; }
     public bool ThrowOnError { get; }
 
+    public bool IsComplete => taskCompletionSource.Task.IsCompleted;
+
     public Transaction(T entity, bool throwOnError)
     {
         Entity = entity;
@@ -35,12 +37,6 @@ internal class Transaction<T> where T : IEntity
 
     public void Complete()
     {
-        this.taskCompletionSource.SetResult();
-    }
-
-    public void TryFailed()
-    {
-        FailedConcurrency = true;
         this.taskCompletionSource.SetResult();
     }
 

@@ -85,7 +85,7 @@ internal class EntityStore<T> where T : class, IEntity
                     }
                     else
                     {
-                        transaction.TryFailed();
+                        transaction.Complete();
                     }
                     return false;
                 }
@@ -121,12 +121,12 @@ internal class EntityStore<T> where T : class, IEntity
                         if (transaction.ThrowOnError)
                         {
                             transaction.SetError(new ConcurrencyException(entity.Key, entity.Version, existingDocument.Version));
+                            return false;
                         }
                         else
                         {
-                            transaction.TryFailed();
+                            transaction.Complete();
                         }
-                        return false;
                     }
                     deadEntitiesInExisting++;
                 }
@@ -135,7 +135,10 @@ internal class EntityStore<T> where T : class, IEntity
                     newEntitiesCount++;
                 }
             }
-
+            if (transaction.IsComplete)
+            {
+                return;
+            }
             this.deadEntityCount += deadEntitiesInExisting;
             this.entityCount += newEntitiesCount;
 

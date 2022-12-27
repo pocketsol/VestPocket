@@ -147,13 +147,13 @@ public class VestPocketStore<TEntity> : IDisposable where TEntity : class, IEnti
         return (T)transaction.Entity;
     }
 
-    public async Task<bool> TrySave<T>(T entity) where  T : class, TEntity
+    public async Task<T> TrySave<T>(T entity) where  T : class, TEntity
     {
         EnsureWriteAccess();
         var transaction = new Transaction<TEntity>(entity, false);
         transactionQueue.Enqueue(transaction);
         await transaction.Task.ConfigureAwait(false);
-        return !transaction.FailedConcurrency;
+        return (T)transaction.Entity;
     }
 
     public T Get<T>(string key) where T : class, TEntity
