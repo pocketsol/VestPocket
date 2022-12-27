@@ -105,11 +105,12 @@ internal class EntityStore<T> where T : class, IEntity
         {
             int deadEntitiesInExisting = 0;
             int newEntitiesCount = 0;
+            bool failedTrySave = false;
             for (int i = 0; i < transaction.Entities.Length; i++)
             {
                 var entity = transaction.Entities[i];
-
                 var existingDocument = lookup.Get(entity.Key);
+
                 if (existingDocument != null)
                 {
                     if (
@@ -117,7 +118,7 @@ internal class EntityStore<T> where T : class, IEntity
                         (existingDocument.Deleted && entity.Version != 0)
                         )
                     {
-                        transaction.Entity = existingDocument;
+                        transaction.Entities[i] = existingDocument;
                         if (transaction.ThrowOnError)
                         {
                             transaction.SetError(new ConcurrencyException(entity.Key, entity.Version, existingDocument.Version));
@@ -125,8 +126,10 @@ internal class EntityStore<T> where T : class, IEntity
                         }
                         else
                         {
-                            transaction.Complete();
+                            failedTrySave = true;
+                            continue;
                         }
+
                     }
                     deadEntitiesInExisting++;
                 }
@@ -135,9 +138,11 @@ internal class EntityStore<T> where T : class, IEntity
                     newEntitiesCount++;
                 }
             }
-            if (transaction.IsComplete)
+            if (failedTrySave )
             {
-                return;
+                transaction.FailedConcurrency = true;
+                transaction.Complete();
+                return false;
             }
             this.deadEntityCount += deadEntitiesInExisting;
             this.entityCount += newEntitiesCount;
