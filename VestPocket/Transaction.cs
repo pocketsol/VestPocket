@@ -15,6 +15,9 @@ internal class Transaction<T> where T : IEntity
     private T[] entities;
     public bool FailedConcurrency { get; set; }
 
+    private bool noOp;
+    public bool NoOp => noOp;
+
     public T Entity { get => entity; internal set => entity = value; }
     public T[] Entities { get => entities; internal set => entities = value; }
     public bool ThrowOnError { get; }
@@ -31,6 +34,11 @@ internal class Transaction<T> where T : IEntity
     {
         Entities = entities;
         ThrowOnError = throwOnError;
+    }
+
+    public Transaction()
+    {
+        this.noOp = true;
     }
 
     public bool IsSingleChange => this.Entity != null;

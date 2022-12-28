@@ -63,6 +63,18 @@ internal class TransactionQueue<TBaseType> where TBaseType : class, IEntity
             while (!cancellationToken.IsCancellationRequested )
             {
                 Transaction<TBaseType> transaction = await queueItemChannel.Reader.ReadAsync(cancellationToken);
+
+                if (transactionStore.RewriteReadyToComplete)
+                {
+                    transactionStore.CompleteRewrite();
+                }
+
+                if (transaction.NoOp)
+                {
+                    transaction.Complete();
+                    continue;
+                }
+
                 this.Metrics.queueWaits++;
                 sw.Restart();
                 do
@@ -90,7 +102,7 @@ internal class TransactionQueue<TBaseType> where TBaseType : class, IEntity
                     transactionStore.Flush();
                     this.Metrics.flushCount++;
                 }
-
+                this.transactionStore.CheckForMaintenance();
             }
         }
         catch (OperationCanceledException)

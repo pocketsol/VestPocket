@@ -14,6 +14,7 @@ namespace VestPocket;
 /// </summary>
 internal class TransactionLog<T> : IDisposable where T : class, IEntity
 {
+    private readonly VestPocketStore<T> store;
     private Stream outputStream;
     private FileStream fileOutputStream;
     private readonly Func<Stream> rewriteStreamFactory;
@@ -22,7 +23,7 @@ internal class TransactionLog<T> : IDisposable where T : class, IEntity
     private readonly JsonTypeInfo<T> jsonTypeInfo;
     private readonly VestPocketOptions options;
     private int unflushed = 0;
-    private readonly object writeLock = new();
+    private readonly object rewriteLock = new();
     private Task rewriteTask;
     private bool isDisposing = false;
 
@@ -31,7 +32,13 @@ internal class TransactionLog<T> : IDisposable where T : class, IEntity
 
     private StoreHeader header;
 
+    private bool rewriteReadyToComplete = false;
+    private bool rewriteIsBackup = false;
+
+    public bool RewriteReadyToComplete { get => rewriteReadyToComplete; }
+
     public TransactionLog(
+        VestPocketStore<T> store,
         Stream outputStream,
         Func<Stream> rewriteStreamFactory,
         Func<Stream, Stream, Stream> swapRewriteStreamCallback,
@@ -40,6 +47,7 @@ internal class TransactionLog<T> : IDisposable where T : class, IEntity
         VestPocketOptions options
         )
     {
+        this.store = store;
         this.outputStream = outputStream;
         this.fileOutputStream = outputStream as FileStream;
         this.rewriteStreamFactory = rewriteStreamFactory;
@@ -51,6 +59,9 @@ internal class TransactionLog<T> : IDisposable where T : class, IEntity
 
     private async Task Rewrite(bool isBackup)
     {
+        rewriteReadyToComplete = false;
+        rewriteIsBackup = isBackup;
+
         var itemsRewritten = 0;
 
         using var allItems = memoryStore.GetByPrefix<T>(string.Empty);
@@ -92,13 +103,18 @@ internal class TransactionLog<T> : IDisposable where T : class, IEntity
         }
 
         stream.Flush();
+        rewriteReadyToComplete = true;
 
-        lock (writeLock)
+    }
+
+    public void CompleteRewrite()
+    {
+        lock (rewriteLock)
         {
-            if (isBackup)
+            if (this.rewriteIsBackup)
             {
-                rewriteTailBuffer.WriteTo(stream);
-                stream.Close();
+                rewriteTailBuffer.WriteTo(rewriteStream);
+                rewriteStream.Close();
             }
             else
             {
@@ -110,14 +126,15 @@ internal class TransactionLog<T> : IDisposable where T : class, IEntity
             rewriteStream = null;
             rewriteTailBuffer = null;
             header.CompressedEntities = null;
+            this.rewriteReadyToComplete = false;
+            this.rewriteIsBackup = false;
+            Console.WriteLine("Rewrite Complete");
         }
-
-
     }
 
     public void Flush()
     {
-        lock(writeLock)
+        lock(rewriteLock)
         {
             if (fileOutputStream != null)
             {
@@ -276,7 +293,7 @@ internal class TransactionLog<T> : IDisposable where T : class, IEntity
         {
             return;
         }
-        lock (writeLock)
+        lock (rewriteLock)
         {
             if (unflushed > 0)
             {
@@ -340,53 +357,63 @@ internal class TransactionLog<T> : IDisposable where T : class, IEntity
         long startingPosition;
         long endingPosition;
 
-        lock (writeLock)
+        startingPosition = outputStream.Position;
+
+        // If the file is blank, dump a header value
+        if (startingPosition == 0)
         {
-            startingPosition = outputStream.Position;
-
-            // If the file is blank, dump a header value
-            if (startingPosition == 0)
-            {
-                JsonSerializer.Serialize(outputStream, this.header, InternalSerializationContext.Default.StoreHeader);
-                outputStream.Write(LF, 0, 1);
-            }
-
-            JsonSerializer.Serialize(outputStream, entity, jsonTypeInfo);
+            JsonSerializer.Serialize(outputStream, this.header, InternalSerializationContext.Default.StoreHeader);
             outputStream.Write(LF, 0, 1);
+        }
 
-            var written = outputStream.Position - startingPosition;
-            unflushed += (int)written;
+        JsonSerializer.Serialize(outputStream, entity, jsonTypeInfo);
+        outputStream.Write(LF, 0, 1);
 
-            // Check if we need to start rewriting
-            if (rewriteTailBuffer == null)
-            {
-                var ratio = memoryStore.DeadEntityCount / memoryStore.EntityCount;
-                if (ratio > options.RewriteRatio && memoryStore.EntityCount > options.RewriteMinimum)
-                {
-                    rewriteTailBuffer = new MemoryStream();
-                    rewriteStream = rewriteStreamFactory();
+        var written = outputStream.Position - startingPosition;
+        unflushed += (int)written;
 
-                    memoryStore.ResetDeadSpace();
-                    rewriteTask = Task.Run(() => Rewrite(false));
-                }
-            }
-
+        if (rewriteTailBuffer != null)
+        {
             if (rewriteTailBuffer != null)
             {
                 JsonSerializer.Serialize(rewriteTailBuffer, entity, jsonTypeInfo);
-                outputStream.Write(LF, 0, 1);
+                rewriteTailBuffer.Write(LF, 0, 1);
             }
-
-            endingPosition = outputStream.Position;
         }
+
+        endingPosition = outputStream.Position;
 
         return endingPosition - startingPosition;
 
     }
 
+    public void CheckForMaintenance()
+    {
+        // Check if we need to start rewriting
+        if (rewriteTailBuffer == null)
+        {
+            var ratio = memoryStore.DeadEntityCount / memoryStore.EntityCount;
+            if (ratio > options.RewriteRatio && memoryStore.EntityCount > options.RewriteMinimum)
+            {
+                lock (rewriteLock)
+                {
+                    if (rewriteTailBuffer == null)
+                    {
+                        rewriteTailBuffer = new MemoryStream();
+                        rewriteStream = rewriteStreamFactory();
+
+                        memoryStore.ResetDeadSpace();
+                        rewriteTask = Task.Run(() => Rewrite(false));
+                    }
+                }
+
+            }
+        }
+    }
+
     public void RemoveAllDocuments()
     {
-        lock (writeLock)
+        lock (rewriteLock)
         {
             outputStream.SetLength(0);
             outputStream.Flush();
@@ -394,12 +421,12 @@ internal class TransactionLog<T> : IDisposable where T : class, IEntity
         }
     }
 
-    public Task ForceMaintenance()
+    public async Task ForceMaintenance()
     {
-        lock (writeLock)
+        lock (rewriteLock)
         {
             //no-op if we are already building a rewrite
-            if (rewriteStream == null)
+            if (rewriteTailBuffer == null)
             {
                 rewriteTailBuffer = new MemoryStream();
                 rewriteStream = rewriteStreamFactory();
@@ -407,7 +434,8 @@ internal class TransactionLog<T> : IDisposable where T : class, IEntity
                 rewriteTask = Task.Run(() => Rewrite(false));
             }
         }
-        return rewriteTask;
+        await rewriteTask;
+        await store.QueueNoOpTransaction();
     }
 
     public async Task CreateBackup(string filePath)
@@ -424,15 +452,16 @@ internal class TransactionLog<T> : IDisposable where T : class, IEntity
             // a rewrite is ongoing, but we also can't guarantee
             // another thread won't start a rewrite after we await
             // the rewrite task
-            lock (writeLock)
+            lock (rewriteLock)
             {
-                if (rewriteTask != null) continue;
+                if (rewriteTailBuffer != null) continue;
                 rewriteTailBuffer = new MemoryStream();
                 rewriteStream = new FileStream(filePath, FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None);
                 rewriteTask = Task.Run(() => Rewrite(true));
             }
 
             await rewriteTask;
+            await store.QueueNoOpTransaction();
             break;
 
         }

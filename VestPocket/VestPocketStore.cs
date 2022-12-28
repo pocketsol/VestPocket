@@ -58,6 +58,7 @@ public class VestPocketStore<TEntity> : IDisposable where TEntity : class, IEnti
 
             var memoryStream = new MemoryStream();
             transactionStore = new TransactionLog<TEntity>(
+                this,
                 memoryStream,
                 () => new MemoryStream(),
                 SwapMemoryRewriteStream,
@@ -76,6 +77,7 @@ public class VestPocketStore<TEntity> : IDisposable where TEntity : class, IEnti
             var file = new FileStream(options.FilePath, FileMode.OpenOrCreate, fileAccess, fileShare, 4096);
 
             transactionStore = new TransactionLog<TEntity>(
+                this,
                 file,
                 RewriteFileStreamFactory,
                 SwapFileRewriteStream,
@@ -269,6 +271,13 @@ public class VestPocketStore<TEntity> : IDisposable where TEntity : class, IEnti
     {
         outputStream.Dispose();
         return rewriteStream;
+    }
+
+    internal async Task QueueNoOpTransaction()
+    {
+        var transaction = new Transaction<TEntity>();
+        transactionQueue.Enqueue(transaction);
+        await transaction.Task;
     }
 
 }
