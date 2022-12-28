@@ -14,6 +14,7 @@ internal class TransactionQueue<TBaseType> where TBaseType : class, IEntity
 {
     private readonly TransactionLog<TBaseType> transactionStore;
     private readonly EntityStore<TBaseType> memoryStore;
+    private readonly VestPocketOptions options;
     private Task processQueuesTask;
     private CancellationTokenSource processQueuesCancellationTokenSource;
     private readonly Channel<Transaction<TBaseType>> queueItemChannel;
@@ -23,12 +24,14 @@ internal class TransactionQueue<TBaseType> where TBaseType : class, IEntity
 
     public TransactionQueue(
         TransactionLog<TBaseType> transactionStore,
-        EntityStore<TBaseType> memoryStore
+        EntityStore<TBaseType> memoryStore,
+        VestPocketOptions options
     )
     {
         this.queueItemChannel = Channel.CreateUnbounded<Transaction<TBaseType>>(new UnboundedChannelOptions { SingleReader = true, AllowSynchronousContinuations = true });
         this.transactionStore = transactionStore;
         this.memoryStore = memoryStore;
+        this.options = options;
     }
 
     public Task Start()
@@ -74,9 +77,20 @@ internal class TransactionQueue<TBaseType> where TBaseType : class, IEntity
                         this.Metrics.bytesSerialized += transactionStore.WriteTransaction(transaction);
                         this.Metrics.serializationTime += sw.Elapsed;
                     }
-                    this.Metrics.count++;
-
+                    this.Metrics.transactionCount++;
+                    if (options.Durability == VestPocketDurability.FlushEachTransaction)
+                    {
+                        transactionStore.Flush();
+                        this.Metrics.flushCount++;
+                    }
                 } while (queueItemChannel.Reader.TryRead(out transaction));
+
+                if (options.Durability != VestPocketDurability.FlushEachTransaction)
+                {
+                    transactionStore.Flush();
+                    this.Metrics.flushCount++;
+                }
+
             }
         }
         catch (OperationCanceledException)

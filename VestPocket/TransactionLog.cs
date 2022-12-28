@@ -29,8 +29,6 @@ internal class TransactionLog<T> : IDisposable where T : class, IEntity
     private MemoryStream rewriteTailBuffer;
     private Stream rewriteStream;
 
-    Thread flushThread;
-
     private StoreHeader header;
 
     public TransactionLog(
@@ -117,48 +115,24 @@ internal class TransactionLog<T> : IDisposable where T : class, IEntity
 
     }
 
-    public void StartFileManagement()
+    public void Flush()
     {
-        if (options.ReadOnly) { return; }
-
-        if (flushThread == null)
+        lock(writeLock)
         {
-            flushThread = new Thread (PerformAutomaticFlushing);
-            flushThread.Start();
-        }
-
-    }
-
-    private void PerformAutomaticFlushing()
-    {
-        while (!isDisposing)
-        {
-            Thread.Sleep(1000);
-
-            if (unflushed > 0)
+            if (fileOutputStream != null)
             {
-                lock (writeLock)
+                if (options.Durability == VestPocketDurability.FileSystemCache)
                 {
-                    if (unflushed == 0)
-                    {
-                        continue;
-                    }
-
-                    if (outputStream == null)
-                    {
-                        return;
-                    }
-                    if (outputStream is FileStream fileStream)
-                    {
-                        fileStream.Flush(true);
-                    }
-                    else
-                    {
-                        outputStream.Flush();
-                    }
-
-                    unflushed = 0;
+                    fileOutputStream.Flush(false);
                 }
+                else
+                {
+                    fileOutputStream.Flush(true);
+                }
+            }
+            else
+            {
+                outputStream.Flush();
             }
         }
     }
@@ -467,9 +441,7 @@ internal class TransactionLog<T> : IDisposable where T : class, IEntity
 
     private async IAsyncEnumerable<byte[]> GetCompressedRewriteSegments(PrefixResult<T> entities, [EnumeratorCancellation] CancellationToken cancellationToken)
     {
-        Stopwatch sw = Stopwatch.StartNew();
         using var serializeStream = new MemoryStream();
-
         var compressedBackingStream = new MemoryStream();
         var brotliStream = new BrotliStream(compressedBackingStream, CompressionLevel.Optimal);
 
@@ -506,8 +478,6 @@ internal class TransactionLog<T> : IDisposable where T : class, IEntity
         }
 
         brotliStream.Dispose();
-
-        //Console.WriteLine("Rewrite compression took: " + sw.ElapsedMilliseconds + "ms");
     }
 
     public Task RewriteTask => rewriteTask;

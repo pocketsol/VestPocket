@@ -91,7 +91,8 @@ class Program
 
         Console.WriteLine();
         Console.WriteLine("-----Transaction Metrics-------------");
-        Console.WriteLine($"Count: {connection.TransactionMetrics.Count}");
+        Console.WriteLine($"Transaction Count: {connection.TransactionMetrics.TransactionCount}");
+        Console.WriteLine($"Flush Count: {connection.TransactionMetrics.FlushCount}");
         Console.WriteLine($"Validation Time: {connection.TransactionMetrics.AverageValidationTime.TotalMicroseconds}us");
         Console.WriteLine($"Serialization Time: {connection.TransactionMetrics.AverageSerializationTime.TotalMicroseconds}us");
         Console.WriteLine($"Serialized Bytes: {connection.TransactionMetrics.BytesSerialized}");

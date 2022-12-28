@@ -130,12 +130,12 @@ public class VestPocketStoreTests : IClassFixture<VestPocketStoreFixture>
     }
 
     [Fact]
-    public async Task TrySave_ReturnsCurrentWithOldVersionDocument()
+    public async Task TrySave_ReturnsFalseOnOldVersionDocument()
     {
         var key = "crud";
         var version1 = await testStore.Save(new TestDocument(key, 0, false, "doc1"));
         var version0 = version1 with { Version = 0 };
-        var expected = version1;
+        var expected = false;
         var actual = await testStore.TrySave(version0);
         Assert.Equal(expected, actual);
     }

@@ -50,6 +50,11 @@ public class VestPocketOptions
     public bool CompressOnRewrite { get; set; } = false;
 
     /// <summary>
+    /// The strategy for file durability that will be used with this VestPocketStore.
+    /// </summary>
+    public VestPocketDurability Durability { get; set; } = VestPocketDurability.FlushOnDelay;
+
+    /// <summary>
     /// Returns the first validation failure message, or null if the options appear valid
     /// </summary>
     public string Validate()
@@ -57,6 +62,11 @@ public class VestPocketOptions
         if (FilePath == null && ReadOnly)
         {
             return "If the FilePath is null, then ReadOnly cannot be true, as that would imply opening a store to an empty memory stream that cannot be written to.";
+        }
+
+        if (FilePath != null && Durability == VestPocketDurability.Unknown)
+        {
+            return "If a FilePath is supplied, than a Durability other than Unknown must be supplied";
         }
 
         if (RewriteRatio <= 0.0)

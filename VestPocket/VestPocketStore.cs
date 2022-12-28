@@ -86,13 +86,11 @@ public class VestPocketStore<TEntity> : IDisposable where TEntity : class, IEnti
         }
 
         this.transactionStore = transactionStore;
-
-        this.transactionStore.StartFileManagement();
         await this.LoadRecordsFromStore(cancellationToken);
 
         if (!options.ReadOnly)
         {
-            this.transactionQueue = new TransactionQueue<TEntity>(transactionStore, entityStore);
+            this.transactionQueue = new TransactionQueue<TEntity>(transactionStore, entityStore, options);
             await this.transactionQueue.Start();
         }
 
@@ -147,13 +145,13 @@ public class VestPocketStore<TEntity> : IDisposable where TEntity : class, IEnti
         return (T)transaction.Entity;
     }
 
-    public async Task<T> TrySave<T>(T entity) where  T : class, TEntity
+    public async Task<bool> TrySave<T>(T entity) where  T : class, TEntity
     {
         EnsureWriteAccess();
         var transaction = new Transaction<TEntity>(entity, false);
         transactionQueue.Enqueue(transaction);
         await transaction.Task.ConfigureAwait(false);
-        return (T)transaction.Entity;
+        return transaction.FailedConcurrency;
     }
 
     public T Get<T>(string key) where T : class, TEntity
