@@ -128,7 +128,6 @@ internal class TransactionLog<T> : IDisposable where T : class, IEntity
             header.CompressedEntities = null;
             this.rewriteReadyToComplete = false;
             this.rewriteIsBackup = false;
-            Console.WriteLine("Rewrite Complete");
         }
     }
 

@@ -69,16 +69,16 @@ internal class TransactionQueue<TBaseType> where TBaseType : class, IEntity
                     transactionStore.CompleteRewrite();
                 }
 
-                if (transaction.NoOp)
-                {
-                    transaction.Complete();
-                    continue;
-                }
-
                 this.Metrics.queueWaits++;
                 sw.Restart();
                 do
                 {
+
+                    if (transaction.NoOp)
+                    {
+                        transaction.Complete();
+                        continue;
+                    }
 
                     var appliedInMemory = memoryStore.ProcessTransaction(transaction);
                     this.Metrics.validationTime += sw.Elapsed;

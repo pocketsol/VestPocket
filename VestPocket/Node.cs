@@ -7,7 +7,7 @@ namespace VestPocket;
 internal class Node<T> where T : class, IEntity
 {
     public string KeySegment;
-    public Node<T>[] Children;
+    public Node<T>[] Children = Array.Empty<Node<T>>();
     public T Value;
 
     public Node()
@@ -81,7 +81,7 @@ internal class Node<T> where T : class, IEntity
 
     private void AddChild(Node<T> newChild)
     {
-        if (Children == null)
+        if (Children.Length == 0)
         {
             var newChildArray = new Node<T>[1] { newChild };
             Children = newChildArray;
@@ -122,9 +122,6 @@ internal class Node<T> where T : class, IEntity
 
     public Node<T> GetValue(ReadOnlySpan<char> key)
     {
-        if (Children == null) return null;
-        //var remainingKeyLength = key.Length - startingCharacter;
-
         foreach (var child in Children)
         {
             if (key[0] != child.KeySegment[0]) continue;
@@ -162,26 +159,24 @@ internal class Node<T> where T : class, IEntity
 
     public void GetValuesByPrefix<TSelection>(ReadOnlySpan<char> key, PrefixResult<TSelection> result) where TSelection : class, T
     {
-        if (Children != null)
+        foreach (var child in Children)
         {
-            foreach (var child in Children)
+
+            if (key[0] != child.KeySegment[0]) continue;
+            var matchingCharacters = key.CommonPrefixLength(child.KeySegment);
+
+            if (matchingCharacters > 0)
             {
-                if (key[0] != child.KeySegment[0]) continue;
-
-                var matchingCharacters = key.CommonPrefixLength(child.KeySegment);
-                if (matchingCharacters > 0)
+                if (matchingCharacters == key.Length)
                 {
-                    if (matchingCharacters == key.Length)
-                    {
-                        // We found a key that matched the entire prefix,
-                        // either exactly or at least to the length of the search key
+                    // We found a key that matched the entire prefix,
+                    // either exactly or at least to the length of the search key
 
-                        child.CollectValues(result);
-                    }
-                    else if (matchingCharacters < key.Length)
-                    {
-                        child.GetValuesByPrefix(key.Slice(matchingCharacters), result);
-                    }
+                    child.CollectValues(result);
+                }
+                else if (matchingCharacters < key.Length)
+                {
+                    child.GetValuesByPrefix(key.Slice(matchingCharacters), result);
                 }
             }
         }
@@ -196,7 +191,6 @@ internal class Node<T> where T : class, IEntity
     private void CollectValuesRecursive<TSelection>(PrefixResult<TSelection> result) where TSelection : class, T
     {
         if (Value != null) result.Add((TSelection)this.Value);
-        if (Children == null) return;
 
         foreach (var child in Children)
         {
@@ -207,18 +201,13 @@ internal class Node<T> where T : class, IEntity
             // We unroll a few layers of child values before recursing
 
             if (child.Value != null) result.Add((TSelection)child.Value);
-            if (child.Children == null) continue;
 
             foreach (var child2 in child.Children)
             {
                 if (child2.Value != null) result.Add((TSelection)child2.Value);
-                if (child2.Children == null) continue;
-
                 foreach (var child3 in child2.Children)
                 {
                     if (child3.Value != null) result.Add((TSelection)child3.Value);
-                    if (child3.Children == null) continue;
-
                     foreach (var child4 in child3.Children)
                     {
                         child4.CollectValuesRecursive(result);
@@ -236,22 +225,19 @@ internal class Node<T> where T : class, IEntity
     /// <returns>The number of matching bytes</returns>
     private Node<T> FindMatchingChild(ReadOnlySpan<char> keySegment, out int bytesMatching, out int matachingIndex)
     {
-        if (Children != null)
+        for (int i = 0; i < Children.Length; i++)
         {
-            for (int i = 0; i < Children.Length; i++)
+            Node<T> child = Children[i];
+
+            if (keySegment[0] != child.KeySegment[0]) continue;
+
+            var matchingBytes = keySegment.CommonPrefixLength(child.KeySegment);
+
+            if (matchingBytes > 0)
             {
-                Node<T> child = Children[i];
-
-                if (keySegment[0] != child.KeySegment[0]) continue;
-
-                var matchingBytes = keySegment.CommonPrefixLength(child.KeySegment);
-
-                if (matchingBytes > 0)
-                {
-                    bytesMatching = matchingBytes;
-                    matachingIndex = i;
-                    return child;
-                }
+                bytesMatching = matchingBytes;
+                matachingIndex = i;
+                return child;
             }
         }
         bytesMatching = 0;
@@ -267,27 +253,20 @@ internal class Node<T> where T : class, IEntity
     public int CountValues(int runningCount = 0)
     {
         if (Value != null) runningCount++;
-
-        if (Children != null)
+        for (int i = 0; i < Children.Length; i++)
         {
-            for (int i = 0; i < Children.Length; i++)
-            {
-                Node<T> child = Children[i];
-                runningCount = child.CountValues(runningCount);
-            }
+            Node<T> child = Children[i];
+            runningCount = child.CountValues(runningCount);
         }
         return runningCount;
     }
 
     private int GetChildrenCountInternal(int runningCount)
     {
-        if (Children != null)
+        foreach (var child in Children)
         {
-            foreach (var child in Children)
-            {
-                runningCount++;
-                runningCount = child.GetChildrenCountInternal(runningCount);
-            }
+            runningCount++;
+            runningCount = child.GetChildrenCountInternal(runningCount);
         }
         return runningCount;
     }
@@ -299,16 +278,13 @@ internal class Node<T> where T : class, IEntity
 
     private int GetValuesCountInternal(int runningCount)
     {
-        if (Children != null)
+        foreach (var child in Children)
         {
-            foreach (var child in Children)
+            if (child.Value != null)
             {
-                if (child.Value != null)
-                {
-                    runningCount++;
-                }
-                runningCount = child.GetChildrenCountInternal(runningCount);
+                runningCount++;
             }
+            runningCount = child.GetChildrenCountInternal(runningCount);
         }
         return runningCount;
     }
