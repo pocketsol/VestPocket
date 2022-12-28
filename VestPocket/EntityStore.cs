@@ -52,7 +52,6 @@ internal class EntityStore<T> where T : class, IEntity
     /// <param name="prefix">The prefix that will be used to search for matches.</param>
     /// <param name="sortResults">If the results will be sorted by key when returned.</param>
     /// <returns></returns>
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public PrefixResult<TSelection> GetByPrefix<TSelection>(string prefix) where TSelection : class, T
     {
         return lookup.GetByPrefix<TSelection>(prefix);
