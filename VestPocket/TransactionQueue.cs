@@ -28,7 +28,7 @@ internal class TransactionQueue<TBaseType> where TBaseType : class, IEntity
         VestPocketOptions options
     )
     {
-        this.queueItemChannel = Channel.CreateUnbounded<Transaction<TBaseType>>(new UnboundedChannelOptions { SingleReader = true, AllowSynchronousContinuations = true });
+        this.queueItemChannel = Channel.CreateUnbounded<Transaction<TBaseType>>(new UnboundedChannelOptions { SingleReader = true, AllowSynchronousContinuations = false });
         this.transactionStore = transactionStore;
         this.memoryStore = memoryStore;
         this.options = options;

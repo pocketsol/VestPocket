@@ -125,7 +125,7 @@ public class VestPocketStore<TEntity> : IDisposable where TEntity : class, IEnti
         EnsureWriteAccess();
         var transaction = new Transaction<TEntity>(entities, true);
         transactionQueue.Enqueue(transaction);
-        await transaction.Task.ConfigureAwait(false);
+        await transaction.Task;
         return transaction.Entities;
     }
 
@@ -134,7 +134,7 @@ public class VestPocketStore<TEntity> : IDisposable where TEntity : class, IEnti
         EnsureWriteAccess();
         var transaction = new Transaction<TEntity>(entities, false);
         transactionQueue.Enqueue(transaction);
-        await transaction.Task.ConfigureAwait(false);
+        await transaction.Task;
         return !transaction.FailedConcurrency;
     }
 
