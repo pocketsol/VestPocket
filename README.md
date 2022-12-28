@@ -175,49 +175,60 @@ BenchmarkDotNet=v0.13.1, OS=Windows 10.0.19044.2364 (21H2)
 AMD Ryzen 7 5700G with Radeon Graphics, 1 CPU, 16 logical and 8 physical cores
 .NET SDK=7.0.100
   [Host]     : .NET 7.0.0 (7.0.22.51805), X64 RyuJIT
-  Job-HLRTXC : .NET 7.0.0 (7.0.22.51805), X64 RyuJIT
+  Job-UUNWYS : .NET 7.0.0 (7.0.22.51805), X64 RyuJIT
 
 MaxRelativeError=0.05
 
-|       Method |       Mean |    Error |    StdDev |     Median |  Gen 0 | Allocated |
-|------------- |-----------:|---------:|----------:|-----------:|-------:|----------:|
-|     GetByKey |   101.8 ns |  0.42 ns |   0.35 ns |   101.9 ns |      - |         - |
-|       SetKey | 1,185.5 ns | 58.77 ns | 105.98 ns | 1,136.6 ns | 0.0591 |     496 B |
-| GetKeyPrefix | 1,376.0 ns | 15.77 ns |  14.75 ns | 1,373.0 ns | 0.0095 |      88 B |
+|               Method |        Mean |     Error |    StdDev |  Gen 0 | Allocated |
+|--------------------- |------------:|----------:|----------:|-------:|----------:|
+|             GetByKey |    53.93 ns |  0.184 ns |  0.172 ns |      - |         - |
+|               SetKey | 3,622.68 ns | 30.250 ns | 26.816 ns | 0.0572 |     504 B |
+| SetTenPerTransaction | 6,878.29 ns | 43.167 ns | 40.379 ns | 0.2594 |   2,232 B |
+|         GetKeyPrefix | 1,251.17 ns | 10.557 ns |  9.875 ns | 0.0095 |      88 B |
 
 ```
 Before running the benchmark above, 999,999 entities are stored by key.
 
 * GetByKey - Retreives a single entity by key
 * SetKey - Updates an entity by key
+* SetTenPerTransaction - Updates 10 entity values by passing them as an array to save
 * GetKeyPrefix - Performs a prefix search to retreive a small number of elements
 
 ## *Sample output from running VestPocket.ConsoleTest*
 ```console
 ---------Running VestPocket---------
 
---Save Entities (threads:100, iterations:10000)--
-Throughput 624732/s
-Latency Median: 0.161000 Max:0.158181
+--Create Entities (threads:100, iterations:1000)--
+Throughput 4784987/s
+Latency Median: 0.000200 Max:0.000308
 
---Read Entities (threads:100, iterations:10000)--
-Throughput 32959355/s
-Latency Median: 0.000800 Max:0.000462
+--Save Entities (threads:100, iterations:1000)--
+Throughput 579607/s
+Latency Median: 0.161000 Max:0.172479
 
---Prefix Search (threads:100, iterations:10000)--
-Throughput 2006018/s
-Latency Median: 0.004100 Max:0.024440
+--Read Entities (threads:100, iterations:1000)--
+Throughput 36473721/s
+Latency Median: 0.000500 Max:0.000451
 
---Read and Write Mix (threads:100, iterations:10000)--
-Throughput 318135/s
-Latency Median: 0.286700 Max:0.314295
+--Save Entities Batched (threads:100, iterations:1000)--
+Throughput 1436453/s
+Latency Median: 0.000000 Max:0.069562
+
+--Prefix Search (threads:100, iterations:1000)--
+Throughput 1721888/s
+Latency Median: 0.000700 Max:0.057871
+
+--Read and Write Mix (6 operations) (threads:100, iterations:1000)--
+Throughput 318401/s
+Latency Median: 0.294100 Max:0.314021
 
 -----Transaction Metrics-------------
-Count: 3000000
-Validation Time: 1.5us
-Serialization Time: 1.1us
-Serialized Bytes: 298734095
-Queue Length: 103
+Transaction Count: 300100
+Flush Count: 3001
+Validation Time: 1.8us
+Serialization Time: 1.4us
+Serialized Bytes: 38654094
+Queue Length: 100
 ```
 
 BenchmarkDotNet tests are great for testing the timing and overhead of individual operations, but are less useful for showing the impact of a library or system when under load from many asynchronous requests at a time. VestPocket.ConsoleTest contains a rudementary test that attempts to measure the requests per second of various VestPocket methods. The 'Read and Write Mix' performs two save operations and gets four values by key.

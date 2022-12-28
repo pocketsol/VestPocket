@@ -4,7 +4,7 @@
     <TargetFramework>net7.0</TargetFramework>
     <PackageId>VestPocket</PackageId>
     <Title>Vest Pocket</Title>
-    <Version>0.1.11</Version>
+    <Version>0.1.12</Version>
     <Authors>ketihwill</Authors>
     <Description>
       A lookup that is persisted to an append-only file. It supports immutable records, optimistic concurrency,

@@ -23,7 +23,7 @@ class Program
         Console.WriteLine("---------Running VestPocket---------");
 
         var options = new VestPocketOptions();
-        options.CompressOnRewrite = true;
+        options.RewriteRatio = 100;
 
         connection = new VestPocketStore<Entity>(SourceGenerationContext.Default.Entity, options);
         await connection.OpenAsync(CancellationToken.None);
@@ -42,6 +42,8 @@ class Program
         {
             await connection.Save(new Entity($"{thread}-{i}", 0, false, $"""Just some body text {thread}-{i}"""));
         }, threads, iterations);
+
+        await connection.ForceMaintenance();
 
         await TimeIterations("Read Entities", (thread, i) =>
         {
@@ -63,16 +65,12 @@ class Program
             await connection.Save(entities);
         }, threads, iterations);
 
+        await connection.ForceMaintenance();
+
         await TimeIterations("Prefix Search", (thread, i) =>
         {
             using var prefixSearch = connection.GetByPrefix<Entity>(thread.ToString() + "-99");
-            foreach (var result in prefixSearch.Results)
-            {
-                if (result == null)
-                {
-                    throw new Exception("Failed");
-                }
-            }
+            prefixSearch.Dispose();
             return Task.CompletedTask;
         }, threads, iterations);
 

@@ -26,7 +26,9 @@ public class VestPocketBenchmarks
             System.IO.File.Delete(dbFile);
         }
 
-        store = new VestPocketStore<Entity>(SourceGenerationContext.Default.Entity, VestPocketOptions.Default);
+        var options = new VestPocketOptions();
+        options.RewriteRatio = 100;
+        store = new VestPocketStore<Entity>(SourceGenerationContext.Default.Entity, options);
         store.OpenAsync(CancellationToken.None).Wait();
 
         Task[] setResults = new Task[N];
