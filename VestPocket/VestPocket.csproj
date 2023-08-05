@@ -17,6 +17,7 @@
     <RepositoryUrl>https://github.com/keithwill/VestPocket</RepositoryUrl>
     <RepositoryType>github</RepositoryType>
     <PackageReadmeFile>README.md</PackageReadmeFile>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
   </PropertyGroup>
 
   <ItemGroup>

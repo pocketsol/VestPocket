@@ -1,10 +1,19 @@
 namespace VestPocket;
 
+/// <summary>
+/// Options for configuring the behavior of a VestPocketStore
+/// </summary>
 public class VestPocketOptions
 {
 
+    /// <summary>
+    /// A VestPocketOptions instance created with default options
+    /// </summary>
     public static readonly VestPocketOptions Default = new();
-
+    
+    /// <summary>
+    /// A VestPocketOptions instance created with default options, except it is ReadOnly
+    /// </summary>
     public static readonly VestPocketOptions DefaultReadOnly = new VestPocketOptions { ReadOnly = true };
 
     ///<summary>

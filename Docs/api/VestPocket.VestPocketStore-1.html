@@ -1,0 +1,865 @@
+﻿<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8">
+      <title>Class VestPocketStore&lt;TEntity&gt;
+ | Vest Pocket </title>
+      <meta name="viewport" content="width=device-width, initial-scale=1.0">
+      <meta name="title" content="Class VestPocketStore&lt;TEntity&gt;
+ | Vest Pocket ">
+      
+      <link rel="icon" href="../favicon.ico">
+      <link rel="stylesheet" href="../public/docfx.min.css">
+      <link rel="stylesheet" href="../public/main.css">
+      <meta name="docfx:navrel" content="../toc.html">
+      <meta name="docfx:tocrel" content="toc.html">
+      
+      
+      
+      <meta name="docfx:disabletocfilter" content="true">
+      <meta name="docfx:docurl" content="https://github.com/keithwill/VestPocket/new/main/apiSpec/new?filename=VestPocket_VestPocketStore_1.md&amp;value=---%0Auid%3A%20VestPocket.VestPocketStore%601%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">
+  </head>
+
+  <script type="module">
+    import options from './../public/main.js'
+    import { init } from './../public/docfx.min.js'
+    init(options)
+  </script>
+
+  <script>
+    const theme = localStorage.getItem('theme') || 'auto'
+    document.documentElement.setAttribute('data-bs-theme', theme === 'auto' ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : theme)
+  </script>
+
+
+  <body class="tex2jax_ignore" data-layout="" data-yaml-mime="ManagedReference">
+    <header class="bg-body border-bottom">
+      <nav id="autocollapse" class="navbar navbar-expand-md" role="navigation">
+        <div class="container-xxl flex-nowrap">
+          <a class="navbar-brand" href="../index.html">
+            <img id="logo" class="svg" src="../logo.svg" alt="Vest Pocket">
+            Vest Pocket
+          </a>
+          <button class="btn btn-lg d-md-none border-0" type="button" data-bs-toggle="collapse" data-bs-target="#navpanel" aria-controls="navpanel" aria-expanded="false" aria-label="Toggle navigation">
+            <i class="bi bi-three-dots"></i>
+          </button>
+          <div class="collapse navbar-collapse" id="navpanel">
+            <div id="navbar">
+            </div>
+          </div>
+        </div>
+      </nav>
+    </header>
+
+    <main class="container-xxl">
+      <div class="toc-offcanvas">
+        <div class="offcanvas-md offcanvas-start" tabindex="-1" id="tocOffcanvas" aria-labelledby="tocOffcanvasLabel">
+          <div class="offcanvas-header">
+            <h5 class="offcanvas-title" id="tocOffcanvasLabel">Table of Contents</h5>
+            <button type="button" class="btn-close" data-bs-dismiss="offcanvas" data-bs-target="#tocOffcanvas" aria-label="Close"></button>
+          </div>
+          <div class="offcanvas-body">
+            <nav class="toc" id="toc"></nav>
+          </div>
+        </div>
+      </div>
+
+      <div class="content">
+        <div class="actionbar">
+          <button class="btn btn-lg border-0 d-md-none" style="margin-top: -.65em; margin-left: -.8em" type="button" data-bs-toggle="offcanvas" data-bs-target="#tocOffcanvas" aria-controls="tocOffcanvas" aria-expanded="false" aria-label="Show table of contents">
+            <i class="bi bi-list"></i>
+          </button>
+
+          <nav id="breadcrumb"></nav>
+        </div>
+
+        <article data-uid="VestPocket.VestPocketStore`1">
+
+
+
+  <h1 id="VestPocket_VestPocketStore_1" data-uid="VestPocket.VestPocketStore`1" class="text-break">
+    Class VestPocketStore&lt;TEntity&gt;
+  <a class="header-action link-secondary" title="View source" href="https://github.com/keithwill/VestPocket/blob/main/VestPocket/VestPocketStore.cs/#L11"><i class="bi bi-code-slash"></i></a>
+  </h1>
+
+  <div class="facts text-secondary">
+    <dl><dt>Namespace</dt><dd><a class="xref" href="VestPocket.html">VestPocket</a></dd></dl>
+  <dl><dt>Assembly</dt><dd>VestPocket.dll</dd></dl>
+  </div>
+
+  <div class="markdown summary"><p>Represents access to a VestPocket store for storing entities that inherit from TEntity.
+This is the main API for interacting with a VestPocket store.</p>
+</div>
+  <div class="markdown conceptual"></div>
+
+  <div class="codewrapper">
+    <pre><code class="lang-csharp hljs">public class VestPocketStore&lt;TEntity&gt; : IDisposable where TEntity : class, IEntity</code></pre>
+  </div>
+
+
+
+  <h4 class="section">Type Parameters</h4>
+  <dl class="parameters">
+    <dt><code>TEntity</code></dt>
+    <dd><p>The base entity type of the VestPocketStore</p>
+</dd>
+  </dl>
+
+  <dl class="typelist inheritance">
+    <dt>Inheritance</dt>
+    <dd>
+      <div><a class="xref" href="https://learn.microsoft.com/dotnet/api/system.object">object</a></div>
+      <div><span class="xref">VestPocketStore&lt;TEntity&gt;</span></div>
+    </dd>
+  </dl>
+
+  <dl class="typelist implements">
+    <dt>Implements</dt>
+    <dd>
+      <div><a class="xref" href="https://learn.microsoft.com/dotnet/api/system.idisposable">IDisposable</a></div>
+    </dd>
+  </dl>
+
+
+  <dl class="typelist derived">
+    <dt>Inherited Members</dt>
+    <dd>
+    <div>
+      <a class="xref" href="https://learn.microsoft.com/dotnet/api/system.object.equals#system-object-equals(system-object)">object.Equals(object)</a>
+    </div>
+    <div>
+      <a class="xref" href="https://learn.microsoft.com/dotnet/api/system.object.equals#system-object-equals(system-object-system-object)">object.Equals(object, object)</a>
+    </div>
+    <div>
+      <a class="xref" href="https://learn.microsoft.com/dotnet/api/system.object.gethashcode">object.GetHashCode()</a>
+    </div>
+    <div>
+      <a class="xref" href="https://learn.microsoft.com/dotnet/api/system.object.gettype">object.GetType()</a>
+    </div>
+    <div>
+      <a class="xref" href="https://learn.microsoft.com/dotnet/api/system.object.memberwiseclone">object.MemberwiseClone()</a>
+    </div>
+    <div>
+      <a class="xref" href="https://learn.microsoft.com/dotnet/api/system.object.referenceequals">object.ReferenceEquals(object, object)</a>
+    </div>
+    <div>
+      <a class="xref" href="https://learn.microsoft.com/dotnet/api/system.object.tostring">object.ToString()</a>
+    </div>
+  </dd></dl>
+
+
+
+
+
+
+  <h2 class="section" id="constructors">Constructors
+</h2>
+
+
+  <a id="VestPocket_VestPocketStore_1__ctor_" data-uid="VestPocket.VestPocketStore`1.#ctor*"></a>
+
+  <h3 id="VestPocket_VestPocketStore_1__ctor_System_Text_Json_Serialization_Metadata_JsonTypeInfo__0__VestPocket_VestPocketOptions_" data-uid="VestPocket.VestPocketStore`1.#ctor(System.Text.Json.Serialization.Metadata.JsonTypeInfo{`0},VestPocket.VestPocketOptions)">
+  VestPocketStore(JsonTypeInfo&lt;TEntity&gt;, VestPocketOptions)
+  <a class="header-action link-secondary" title="View source" href="https://github.com/keithwill/VestPocket/blob/main/VestPocket/VestPocketStore.cs/#L54"><i class="bi bi-code-slash"></i></a>
+  </h3>
+
+  <div class="markdown level1 summary"><p>Instantiates a new instance of the VestPocketStore class</p>
+</div>
+  <div class="markdown level1 conceptual"></div>
+
+  <div class="codewrapper">
+    <pre><code class="lang-csharp hljs">public VestPocketStore(JsonTypeInfo&lt;TEntity&gt; jsonTypeInfo, VestPocketOptions options)</code></pre>
+  </div>
+
+  <h4 class="section">Parameters</h4>
+  <dl class="parameters">
+    <dt><code>jsonTypeInfo</code> <a class="xref" href="https://learn.microsoft.com/dotnet/api/system.text.json.serialization.metadata.jsontypeinfo-1">JsonTypeInfo</a>&lt;TEntity&gt;</dt>
+    <dd><p>The JsonTypeInfo to use for serialization of entities inheriting from TEntity</p>
+</dd>
+    <dt><code>options</code> <a class="xref" href="VestPocket.VestPocketOptions.html">VestPocketOptions</a></dt>
+    <dd><p>The configuration options to use with this VestPocketStore when opening it</p>
+</dd>
+  </dl>
+
+
+
+
+
+
+
+
+
+
+
+
+  <h2 class="section" id="properties">Properties
+</h2>
+
+
+  <a id="VestPocket_VestPocketStore_1_DeadEntityCount_" data-uid="VestPocket.VestPocketStore`1.DeadEntityCount*"></a>
+
+  <h3 id="VestPocket_VestPocketStore_1_DeadEntityCount" data-uid="VestPocket.VestPocketStore`1.DeadEntityCount">
+  DeadEntityCount
+  <a class="header-action link-secondary" title="View source" href="https://github.com/keithwill/VestPocket/blob/main/VestPocket/VestPocketStore.cs/#L30"><i class="bi bi-code-slash"></i></a>
+  </h3>
+
+  <div class="markdown level1 summary"><p>The number of dead (deleted or out of date) entities currently in the store</p>
+</div>
+  <div class="markdown level1 conceptual"></div>
+
+  <div class="codewrapper">
+    <pre><code class="lang-csharp hljs">public long DeadEntityCount { get; }</code></pre>
+  </div>
+
+
+
+
+
+  <h4 class="section">Property Value</h4>
+  <dl class="parameters">
+    <dt><a class="xref" href="https://learn.microsoft.com/dotnet/api/system.int64">long</a></dt>
+    <dd></dd>
+  </dl>
+
+
+
+
+
+
+
+
+  <a id="VestPocket_VestPocketStore_1_DeadSpacePercentage_" data-uid="VestPocket.VestPocketStore`1.DeadSpacePercentage*"></a>
+
+  <h3 id="VestPocket_VestPocketStore_1_DeadSpacePercentage" data-uid="VestPocket.VestPocketStore`1.DeadSpacePercentage">
+  DeadSpacePercentage
+  <a class="header-action link-secondary" title="View source" href="https://github.com/keithwill/VestPocket/blob/main/VestPocket/VestPocketStore.cs/#L40"><i class="bi bi-code-slash"></i></a>
+  </h3>
+
+  <div class="markdown level1 summary"><p>The ratio of dead entities to living entities in the store</p>
+</div>
+  <div class="markdown level1 conceptual"></div>
+
+  <div class="codewrapper">
+    <pre><code class="lang-csharp hljs">public double DeadSpacePercentage { get; }</code></pre>
+  </div>
+
+
+
+
+
+  <h4 class="section">Property Value</h4>
+  <dl class="parameters">
+    <dt><a class="xref" href="https://learn.microsoft.com/dotnet/api/system.double">double</a></dt>
+    <dd></dd>
+  </dl>
+
+
+
+
+
+
+
+
+  <a id="VestPocket_VestPocketStore_1_EntityCount_" data-uid="VestPocket.VestPocketStore`1.EntityCount*"></a>
+
+  <h3 id="VestPocket_VestPocketStore_1_EntityCount" data-uid="VestPocket.VestPocketStore`1.EntityCount">
+  EntityCount
+  <a class="header-action link-secondary" title="View source" href="https://github.com/keithwill/VestPocket/blob/main/VestPocket/VestPocketStore.cs/#L35"><i class="bi bi-code-slash"></i></a>
+  </h3>
+
+  <div class="markdown level1 summary"><p>The number of entities currently in the store</p>
+</div>
+  <div class="markdown level1 conceptual"></div>
+
+  <div class="codewrapper">
+    <pre><code class="lang-csharp hljs">public long EntityCount { get; }</code></pre>
+  </div>
+
+
+
+
+
+  <h4 class="section">Property Value</h4>
+  <dl class="parameters">
+    <dt><a class="xref" href="https://learn.microsoft.com/dotnet/api/system.int64">long</a></dt>
+    <dd></dd>
+  </dl>
+
+
+
+
+
+
+
+
+  <a id="VestPocket_VestPocketStore_1_IsDisposed_" data-uid="VestPocket.VestPocketStore`1.IsDisposed*"></a>
+
+  <h3 id="VestPocket_VestPocketStore_1_IsDisposed" data-uid="VestPocket.VestPocketStore`1.IsDisposed">
+  IsDisposed
+  <a class="header-action link-secondary" title="View source" href="https://github.com/keithwill/VestPocket/blob/main/VestPocket/VestPocketStore.cs/#L25"><i class="bi bi-code-slash"></i></a>
+  </h3>
+
+  <div class="markdown level1 summary"><p>If this store has already started disposing</p>
+</div>
+  <div class="markdown level1 conceptual"></div>
+
+  <div class="codewrapper">
+    <pre><code class="lang-csharp hljs">public bool IsDisposed { get; }</code></pre>
+  </div>
+
+
+
+
+
+  <h4 class="section">Property Value</h4>
+  <dl class="parameters">
+    <dt><a class="xref" href="https://learn.microsoft.com/dotnet/api/system.boolean">bool</a></dt>
+    <dd></dd>
+  </dl>
+
+
+
+
+
+
+
+
+  <a id="VestPocket_VestPocketStore_1_TransactionMetrics_" data-uid="VestPocket.VestPocketStore`1.TransactionMetrics*"></a>
+
+  <h3 id="VestPocket_VestPocketStore_1_TransactionMetrics" data-uid="VestPocket.VestPocketStore`1.TransactionMetrics">
+  TransactionMetrics
+  <a class="header-action link-secondary" title="View source" href="https://github.com/keithwill/VestPocket/blob/main/VestPocket/VestPocketStore.cs/#L47"><i class="bi bi-code-slash"></i></a>
+  </h3>
+
+  <div class="markdown level1 summary"><p>Metrics about transactions performed on this store since it was opened.</p>
+</div>
+  <div class="markdown level1 conceptual"></div>
+
+  <div class="codewrapper">
+    <pre><code class="lang-csharp hljs">public TransactionMetrics TransactionMetrics { get; }</code></pre>
+  </div>
+
+
+
+
+
+  <h4 class="section">Property Value</h4>
+  <dl class="parameters">
+    <dt><a class="xref" href="VestPocket.TransactionMetrics.html">TransactionMetrics</a></dt>
+    <dd></dd>
+  </dl>
+
+
+
+
+
+
+
+
+  <h2 class="section" id="methods">Methods
+</h2>
+
+
+  <a id="VestPocket_VestPocketStore_1_Clear_" data-uid="VestPocket.VestPocketStore`1.Clear*"></a>
+
+  <h3 id="VestPocket_VestPocketStore_1_Clear" data-uid="VestPocket.VestPocketStore`1.Clear">
+  Clear()
+  <a class="header-action link-secondary" title="View source" href="https://github.com/keithwill/VestPocket/blob/main/VestPocket/VestPocketStore.cs/#L290"><i class="bi bi-code-slash"></i></a>
+  </h3>
+
+  <div class="markdown level1 summary"><p>A dangerous method that clears all records from the store that exists primarily for testing purposes.</p>
+</div>
+  <div class="markdown level1 conceptual"></div>
+
+  <div class="codewrapper">
+    <pre><code class="lang-csharp hljs">public void Clear()</code></pre>
+  </div>
+
+
+
+
+
+
+
+
+
+
+
+
+
+  <a id="VestPocket_VestPocketStore_1_Close_" data-uid="VestPocket.VestPocketStore`1.Close*"></a>
+
+  <h3 id="VestPocket_VestPocketStore_1_Close_System_Threading_CancellationToken_" data-uid="VestPocket.VestPocketStore`1.Close(System.Threading.CancellationToken)">
+  Close(CancellationToken)
+  <a class="header-action link-secondary" title="View source" href="https://github.com/keithwill/VestPocket/blob/main/VestPocket/VestPocketStore.cs/#L143"><i class="bi bi-code-slash"></i></a>
+  </h3>
+
+  <div class="markdown level1 summary"><p>Closes the connection to the VestPocket store. This will stop pending transactions and
+wait for any pending rewrite task to complete</p>
+</div>
+  <div class="markdown level1 conceptual"></div>
+
+  <div class="codewrapper">
+    <pre><code class="lang-csharp hljs">public Task Close(CancellationToken cancellationToken)</code></pre>
+  </div>
+
+  <h4 class="section">Parameters</h4>
+  <dl class="parameters">
+    <dt><code>cancellationToken</code> <a class="xref" href="https://learn.microsoft.com/dotnet/api/system.threading.cancellationtoken">CancellationToken</a></dt>
+    <dd></dd>
+  </dl>
+
+  <h4 class="section">Returns</h4>
+  <dl class="parameters">
+    <dt><a class="xref" href="https://learn.microsoft.com/dotnet/api/system.threading.tasks.task">Task</a></dt>
+    <dd></dd>
+  </dl>
+
+
+
+
+
+
+
+  <h4 class="section" id="VestPocket_VestPocketStore_1_Close_System_Threading_CancellationToken__remarks">Remarks</h4>
+  <div class="markdown level1 remarks"><p>The CancellationToken paramter is not currently utilized, but may be in the future</p>
+</div>
+
+
+
+
+  <a id="VestPocket_VestPocketStore_1_CreateBackup_" data-uid="VestPocket.VestPocketStore`1.CreateBackup*"></a>
+
+  <h3 id="VestPocket_VestPocketStore_1_CreateBackup_System_String_" data-uid="VestPocket.VestPocketStore`1.CreateBackup(System.String)">
+  CreateBackup(string)
+  <a class="header-action link-secondary" title="View source" href="https://github.com/keithwill/VestPocket/blob/main/VestPocket/VestPocketStore.cs/#L320"><i class="bi bi-code-slash"></i></a>
+  </h3>
+
+  <div class="markdown level1 summary"><p>Creates a backup file. A writeable VestPocketStore will not share access to
+to its backing file. This method can be used while the store is still open to make a copy of the store.</p>
+</div>
+  <div class="markdown level1 conceptual"></div>
+
+  <div class="codewrapper">
+    <pre><code class="lang-csharp hljs">public Task CreateBackup(string filePath)</code></pre>
+  </div>
+
+  <h4 class="section">Parameters</h4>
+  <dl class="parameters">
+    <dt><code>filePath</code> <a class="xref" href="https://learn.microsoft.com/dotnet/api/system.string">string</a></dt>
+    <dd><p>The path to write the backup store file to</p>
+</dd>
+  </dl>
+
+  <h4 class="section">Returns</h4>
+  <dl class="parameters">
+    <dt><a class="xref" href="https://learn.microsoft.com/dotnet/api/system.threading.tasks.task">Task</a></dt>
+    <dd></dd>
+  </dl>
+
+
+
+
+
+
+
+
+
+
+
+  <a id="VestPocket_VestPocketStore_1_Dispose_" data-uid="VestPocket.VestPocketStore`1.Dispose*"></a>
+
+  <h3 id="VestPocket_VestPocketStore_1_Dispose" data-uid="VestPocket.VestPocketStore`1.Dispose">
+  Dispose()
+  <a class="header-action link-secondary" title="View source" href="https://github.com/keithwill/VestPocket/blob/main/VestPocket/VestPocketStore.cs/#L254"><i class="bi bi-code-slash"></i></a>
+  </h3>
+
+  <div class="markdown level1 summary"><p>Disposes of the VestPocketStore. This stops processing queued requests and closes
+the access to the underlying file of the store (if any).</p>
+</div>
+  <div class="markdown level1 conceptual"></div>
+
+  <div class="codewrapper">
+    <pre><code class="lang-csharp hljs">public void Dispose()</code></pre>
+  </div>
+
+
+
+
+
+
+
+
+
+
+
+
+
+  <a id="VestPocket_VestPocketStore_1_ForceMaintenance_" data-uid="VestPocket.VestPocketStore`1.ForceMaintenance*"></a>
+
+  <h3 id="VestPocket_VestPocketStore_1_ForceMaintenance" data-uid="VestPocket.VestPocketStore`1.ForceMaintenance">
+  ForceMaintenance()
+  <a class="header-action link-secondary" title="View source" href="https://github.com/keithwill/VestPocket/blob/main/VestPocket/VestPocketStore.cs/#L309"><i class="bi bi-code-slash"></i></a>
+  </h3>
+
+  <div class="markdown level1 summary"><p>Forces the store to rewrite itself and clear out any dead entities.
+This is performed automatically as the store grows in size, so calling this method
+manually is usually not required.</p>
+</div>
+  <div class="markdown level1 conceptual"></div>
+
+  <div class="codewrapper">
+    <pre><code class="lang-csharp hljs">public Task ForceMaintenance()</code></pre>
+  </div>
+
+
+  <h4 class="section">Returns</h4>
+  <dl class="parameters">
+    <dt><a class="xref" href="https://learn.microsoft.com/dotnet/api/system.threading.tasks.task">Task</a></dt>
+    <dd></dd>
+  </dl>
+
+
+
+
+
+
+
+
+
+
+
+  <a id="VestPocket_VestPocketStore_1_GetByPrefix_" data-uid="VestPocket.VestPocketStore`1.GetByPrefix*"></a>
+
+  <h3 id="VestPocket_VestPocketStore_1_GetByPrefix__1_System_String_" data-uid="VestPocket.VestPocketStore`1.GetByPrefix``1(System.String)">
+  GetByPrefix&lt;T&gt;(string)
+  <a class="header-action link-secondary" title="View source" href="https://github.com/keithwill/VestPocket/blob/main/VestPocket/VestPocketStore.cs/#L245"><i class="bi bi-code-slash"></i></a>
+  </h3>
+
+  <div class="markdown level1 summary"><p>Performs a prefix search for values that have keys starting with the supplied
+prefix value.</p>
+</div>
+  <div class="markdown level1 conceptual"></div>
+
+  <div class="codewrapper">
+    <pre><code class="lang-csharp hljs">public PrefixResult&lt;T&gt; GetByPrefix&lt;T&gt;(string prefix) where T : class, TEntity</code></pre>
+  </div>
+
+  <h4 class="section">Parameters</h4>
+  <dl class="parameters">
+    <dt><code>prefix</code> <a class="xref" href="https://learn.microsoft.com/dotnet/api/system.string">string</a></dt>
+    <dd><p>The case sensitive key prefix to search for</p>
+</dd>
+  </dl>
+
+  <h4 class="section">Returns</h4>
+  <dl class="parameters">
+    <dt><a class="xref" href="VestPocket.PrefixResult-1.html">PrefixResult</a>&lt;T&gt;</dt>
+    <dd><p>tThe search results. PrefixResults implement IDisposable</p>
+</dd>
+  </dl>
+
+  <h4 class="section">Type Parameters</h4>
+  <dl class="parameters">
+    <dt><code>T</code></dt>
+    <dd><p>The type of entities to retreive</p>
+</dd>
+  </dl>
+
+
+
+
+
+
+
+
+
+
+  <a id="VestPocket_VestPocketStore_1_Get_" data-uid="VestPocket.VestPocketStore`1.Get*"></a>
+
+  <h3 id="VestPocket_VestPocketStore_1_Get__1_System_String_" data-uid="VestPocket.VestPocketStore`1.Get``1(System.String)">
+  Get&lt;T&gt;(string)
+  <a class="header-action link-secondary" title="View source" href="https://github.com/keithwill/VestPocket/blob/main/VestPocket/VestPocketStore.cs/#L233"><i class="bi bi-code-slash"></i></a>
+  </h3>
+
+  <div class="markdown level1 summary"><p>Looks up an entity by key</p>
+</div>
+  <div class="markdown level1 conceptual"></div>
+
+  <div class="codewrapper">
+    <pre><code class="lang-csharp hljs">public T Get&lt;T&gt;(string key) where T : class, TEntity</code></pre>
+  </div>
+
+  <h4 class="section">Parameters</h4>
+  <dl class="parameters">
+    <dt><code>key</code> <a class="xref" href="https://learn.microsoft.com/dotnet/api/system.string">string</a></dt>
+    <dd><p>The exact key of the entity to find</p>
+</dd>
+  </dl>
+
+  <h4 class="section">Returns</h4>
+  <dl class="parameters">
+    <dt><span class="xref">T</span></dt>
+    <dd><p>The entity stored with the key specified or null</p>
+</dd>
+  </dl>
+
+  <h4 class="section">Type Parameters</h4>
+  <dl class="parameters">
+    <dt><code>T</code></dt>
+    <dd><p>The type of the entity</p>
+</dd>
+  </dl>
+
+
+
+
+
+
+
+
+
+
+  <a id="VestPocket_VestPocketStore_1_OpenAsync_" data-uid="VestPocket.VestPocketStore`1.OpenAsync*"></a>
+
+  <h3 id="VestPocket_VestPocketStore_1_OpenAsync_System_Threading_CancellationToken_" data-uid="VestPocket.VestPocketStore`1.OpenAsync(System.Threading.CancellationToken)">
+  OpenAsync(CancellationToken)
+  <a class="header-action link-secondary" title="View source" href="https://github.com/keithwill/VestPocket/blob/main/VestPocket/VestPocketStore.cs/#L84"><i class="bi bi-code-slash"></i></a>
+  </h3>
+
+  <div class="markdown level1 summary"><p>Opens the VestPocketStore. This will load records from the store if a file path has been given
+and will begin processing request methods called on the VestPocketStore as well as starting
+background tasks to monitor the store for maintenance. If a file path is provided, and the
+file does not exist, it will be created. If the store is opened for editing, the file will
+be opened with an exclusive lock.</p>
+</div>
+  <div class="markdown level1 conceptual"></div>
+
+  <div class="codewrapper">
+    <pre><code class="lang-csharp hljs">public Task OpenAsync(CancellationToken cancellationToken)</code></pre>
+  </div>
+
+  <h4 class="section">Parameters</h4>
+  <dl class="parameters">
+    <dt><code>cancellationToken</code> <a class="xref" href="https://learn.microsoft.com/dotnet/api/system.threading.cancellationtoken">CancellationToken</a></dt>
+    <dd><p>Loading and parsing records from disk can take time. This cancellation token can be used to enforce a loading timeout,
+if desired.</p>
+</dd>
+  </dl>
+
+  <h4 class="section">Returns</h4>
+  <dl class="parameters">
+    <dt><a class="xref" href="https://learn.microsoft.com/dotnet/api/system.threading.tasks.task">Task</a></dt>
+    <dd></dd>
+  </dl>
+
+
+
+
+
+
+
+
+
+
+
+  <a id="VestPocket_VestPocketStore_1_Save_" data-uid="VestPocket.VestPocketStore`1.Save*"></a>
+
+  <h3 id="VestPocket_VestPocketStore_1_Save__0___" data-uid="VestPocket.VestPocketStore`1.Save(`0[])">
+  Save(TEntity[])
+  <a class="header-action link-secondary" title="View source" href="https://github.com/keithwill/VestPocket/blob/main/VestPocket/VestPocketStore.cs/#L168"><i class="bi bi-code-slash"></i></a>
+  </h3>
+
+  <div class="markdown level1 summary"><p>Takes an array of entities and saves them as a transaction to the store.</p>
+</div>
+  <div class="markdown level1 conceptual"></div>
+
+  <div class="codewrapper">
+    <pre><code class="lang-csharp hljs">public Task&lt;TEntity[]&gt; Save(TEntity[] entities)</code></pre>
+  </div>
+
+  <h4 class="section">Parameters</h4>
+  <dl class="parameters">
+    <dt><code>entities</code> TEntity[]</dt>
+    <dd><p>The entities to save</p>
+</dd>
+  </dl>
+
+  <h4 class="section">Returns</h4>
+  <dl class="parameters">
+    <dt><a class="xref" href="https://learn.microsoft.com/dotnet/api/system.threading.tasks.task-1">Task</a>&lt;TEntity[]&gt;</dt>
+    <dd><p>Returns an array that contains the saved entities with their new version numbers.</p>
+</dd>
+  </dl>
+
+
+
+
+
+
+
+
+
+
+
+  <a id="VestPocket_VestPocketStore_1_Save_" data-uid="VestPocket.VestPocketStore`1.Save*"></a>
+
+  <h3 id="VestPocket_VestPocketStore_1_Save__1___0_" data-uid="VestPocket.VestPocketStore`1.Save``1(``0)">
+  Save&lt;T&gt;(T)
+  <a class="header-action link-secondary" title="View source" href="https://github.com/keithwill/VestPocket/blob/main/VestPocket/VestPocketStore.cs/#L202"><i class="bi bi-code-slash"></i></a>
+  </h3>
+
+  <div class="markdown level1 summary"><p>Saves an entity to the store. Will throw a ConcurrencyException if the version of the entity saved
+is not the current version in the store</p>
+</div>
+  <div class="markdown level1 conceptual"></div>
+
+  <div class="codewrapper">
+    <pre><code class="lang-csharp hljs">public Task&lt;T&gt; Save&lt;T&gt;(T entity) where T : class, TEntity</code></pre>
+  </div>
+
+  <h4 class="section">Parameters</h4>
+  <dl class="parameters">
+    <dt><code>entity</code> <span class="xref">T</span></dt>
+    <dd><p>The entity to save to the store</p>
+</dd>
+  </dl>
+
+  <h4 class="section">Returns</h4>
+  <dl class="parameters">
+    <dt><a class="xref" href="https://learn.microsoft.com/dotnet/api/system.threading.tasks.task-1">Task</a>&lt;T&gt;</dt>
+    <dd><p>The entity that was saved in the store with an updated version</p>
+</dd>
+  </dl>
+
+  <h4 class="section">Type Parameters</h4>
+  <dl class="parameters">
+    <dt><code>T</code></dt>
+    <dd><p>The type of entity to save</p>
+</dd>
+  </dl>
+
+
+
+
+
+
+
+
+
+
+  <a id="VestPocket_VestPocketStore_1_TrySave_" data-uid="VestPocket.VestPocketStore`1.TrySave*"></a>
+
+  <h3 id="VestPocket_VestPocketStore_1_TrySave__1___0_" data-uid="VestPocket.VestPocketStore`1.TrySave``1(``0)">
+  TrySave&lt;T&gt;(T)
+  <a class="header-action link-secondary" title="View source" href="https://github.com/keithwill/VestPocket/blob/main/VestPocket/VestPocketStore.cs/#L218"><i class="bi bi-code-slash"></i></a>
+  </h3>
+
+  <div class="markdown level1 summary"><p>Saves an entity to the store. Will not throw exceptions if the entity fails to save due to
+concurrency issues.</p>
+</div>
+  <div class="markdown level1 conceptual"></div>
+
+  <div class="codewrapper">
+    <pre><code class="lang-csharp hljs">public Task&lt;bool&gt; TrySave&lt;T&gt;(T entity) where T : class, TEntity</code></pre>
+  </div>
+
+  <h4 class="section">Parameters</h4>
+  <dl class="parameters">
+    <dt><code>entity</code> <span class="xref">T</span></dt>
+    <dd><p>The entity to save to the store</p>
+</dd>
+  </dl>
+
+  <h4 class="section">Returns</h4>
+  <dl class="parameters">
+    <dt><a class="xref" href="https://learn.microsoft.com/dotnet/api/system.threading.tasks.task-1">Task</a>&lt;<a class="xref" href="https://learn.microsoft.com/dotnet/api/system.boolean">bool</a>&gt;</dt>
+    <dd><p>True if the entity was saved or false if it failed to save</p>
+</dd>
+  </dl>
+
+  <h4 class="section">Type Parameters</h4>
+  <dl class="parameters">
+    <dt><code>T</code></dt>
+    <dd><p>The type of the entity to save</p>
+</dd>
+  </dl>
+
+
+
+
+
+
+
+
+
+
+  <a id="VestPocket_VestPocketStore_1_TrySave_" data-uid="VestPocket.VestPocketStore`1.TrySave*"></a>
+
+  <h3 id="VestPocket_VestPocketStore_1_TrySave__1___0___" data-uid="VestPocket.VestPocketStore`1.TrySave``1(``0[])">
+  TrySave&lt;T&gt;(T[])
+  <a class="header-action link-secondary" title="View source" href="https://github.com/keithwill/VestPocket/blob/main/VestPocket/VestPocketStore.cs/#L185"><i class="bi bi-code-slash"></i></a>
+  </h3>
+
+  <div class="markdown level1 summary"><p>Tries to save an array of entities as a transaction to the store.
+Does not throw an optimistic concurrency exception if entities fail to save
+due to having stale versions.</p>
+</div>
+  <div class="markdown level1 conceptual"></div>
+
+  <div class="codewrapper">
+    <pre><code class="lang-csharp hljs">public Task&lt;bool&gt; TrySave&lt;T&gt;(T[] entities) where T : class, TEntity</code></pre>
+  </div>
+
+  <h4 class="section">Parameters</h4>
+  <dl class="parameters">
+    <dt><code>entities</code> T[]</dt>
+    <dd><p>The entities to save to the store</p>
+</dd>
+  </dl>
+
+  <h4 class="section">Returns</h4>
+  <dl class="parameters">
+    <dt><a class="xref" href="https://learn.microsoft.com/dotnet/api/system.threading.tasks.task-1">Task</a>&lt;<a class="xref" href="https://learn.microsoft.com/dotnet/api/system.boolean">bool</a>&gt;</dt>
+    <dd><p>True if all the entities saved successfully or false if the transaction failed due to any entity being out of date.</p>
+</dd>
+  </dl>
+
+  <h4 class="section">Type Parameters</h4>
+  <dl class="parameters">
+    <dt><code>T</code></dt>
+    <dd><p>The type of entities to save</p>
+</dd>
+  </dl>
+
+
+
+
+
+
+
+
+
+
+
+</article>
+
+
+        
+      </div>
+
+      <div class="affix">
+        <nav id="affix"></nav>
+      </div>
+    </main>
+
+
+    <footer class="border-top">
+      <div class="container-xxl">
+        <div class="flex-fill">
+          <span>Made with <a href="https://dotnet.github.io/docfx">docfx</a></span>
+        </div>
+      </div>
+    </footer>
+  </body>
+</html>

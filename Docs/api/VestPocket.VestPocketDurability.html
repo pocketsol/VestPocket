@@ -1,0 +1,158 @@
+﻿<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8">
+      <title>Enum VestPocketDurability
+ | Vest Pocket </title>
+      <meta name="viewport" content="width=device-width, initial-scale=1.0">
+      <meta name="title" content="Enum VestPocketDurability
+ | Vest Pocket ">
+      
+      <link rel="icon" href="../favicon.ico">
+      <link rel="stylesheet" href="../public/docfx.min.css">
+      <link rel="stylesheet" href="../public/main.css">
+      <meta name="docfx:navrel" content="../toc.html">
+      <meta name="docfx:tocrel" content="toc.html">
+      
+      
+      
+      <meta name="docfx:disabletocfilter" content="true">
+      <meta name="docfx:docurl" content="https://github.com/keithwill/VestPocket/new/main/apiSpec/new?filename=VestPocket_VestPocketDurability.md&amp;value=---%0Auid%3A%20VestPocket.VestPocketDurability%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">
+  </head>
+
+  <script type="module">
+    import options from './../public/main.js'
+    import { init } from './../public/docfx.min.js'
+    init(options)
+  </script>
+
+  <script>
+    const theme = localStorage.getItem('theme') || 'auto'
+    document.documentElement.setAttribute('data-bs-theme', theme === 'auto' ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : theme)
+  </script>
+
+
+  <body class="tex2jax_ignore" data-layout="" data-yaml-mime="ManagedReference">
+    <header class="bg-body border-bottom">
+      <nav id="autocollapse" class="navbar navbar-expand-md" role="navigation">
+        <div class="container-xxl flex-nowrap">
+          <a class="navbar-brand" href="../index.html">
+            <img id="logo" class="svg" src="../logo.svg" alt="Vest Pocket">
+            Vest Pocket
+          </a>
+          <button class="btn btn-lg d-md-none border-0" type="button" data-bs-toggle="collapse" data-bs-target="#navpanel" aria-controls="navpanel" aria-expanded="false" aria-label="Toggle navigation">
+            <i class="bi bi-three-dots"></i>
+          </button>
+          <div class="collapse navbar-collapse" id="navpanel">
+            <div id="navbar">
+            </div>
+          </div>
+        </div>
+      </nav>
+    </header>
+
+    <main class="container-xxl">
+      <div class="toc-offcanvas">
+        <div class="offcanvas-md offcanvas-start" tabindex="-1" id="tocOffcanvas" aria-labelledby="tocOffcanvasLabel">
+          <div class="offcanvas-header">
+            <h5 class="offcanvas-title" id="tocOffcanvasLabel">Table of Contents</h5>
+            <button type="button" class="btn-close" data-bs-dismiss="offcanvas" data-bs-target="#tocOffcanvas" aria-label="Close"></button>
+          </div>
+          <div class="offcanvas-body">
+            <nav class="toc" id="toc"></nav>
+          </div>
+        </div>
+      </div>
+
+      <div class="content">
+        <div class="actionbar">
+          <button class="btn btn-lg border-0 d-md-none" style="margin-top: -.65em; margin-left: -.8em" type="button" data-bs-toggle="offcanvas" data-bs-target="#tocOffcanvas" aria-controls="tocOffcanvas" aria-expanded="false" aria-label="Show table of contents">
+            <i class="bi bi-list"></i>
+          </button>
+
+          <nav id="breadcrumb"></nav>
+        </div>
+
+        <article data-uid="VestPocket.VestPocketDurability">
+
+
+
+
+  <h1 id="VestPocket_VestPocketDurability" data-uid="VestPocket.VestPocketDurability" class="text-break">
+    Enum VestPocketDurability
+  <a class="header-action link-secondary" title="View source" href="https://github.com/keithwill/VestPocket/blob/main/VestPocket/VestPocketDurability.cs/#L13"><i class="bi bi-code-slash"></i></a>
+  </h1>
+
+  <div class="facts text-secondary">
+    <dl><dt>Namespace</dt><dd><a class="xref" href="VestPocket.html">VestPocket</a></dd></dl>
+  <dl><dt>Assembly</dt><dd>VestPocket.dll</dd></dl>
+  </div>
+
+  <div class="markdown summary"><p>Represents the different file durability strategies for VestPocketStore.
+These settings are only relevant when the store is was opened from a file.</p>
+</div>
+  <div class="markdown conceptual"></div>
+
+  <div class="codewrapper">
+    <pre><code class="lang-csharp hljs">public enum VestPocketDurability</code></pre>
+  </div>
+
+
+
+
+
+
+
+
+
+  <h2 id="fields">Fields
+</h2>
+  <dl class="parameters">
+    <dt id="VestPocket_VestPocketDurability_FileSystemCache"><code>FileSystemCache = 1</code></dt>
+    <dd><p>The file is flushed everytime that the transaction queue is drained,
+but the OS file cache may delay the writes to disk. In this mode, changes
+may be lost if a power outage occurs after a transaction is processed before
+the OS decides to write the file cache to disk. This mode might offer improved
+performance for slower file systems.</p>
+</dd>
+    <dt id="VestPocket_VestPocketDurability_FlushEachTransaction"><code>FlushEachTransaction = 3</code></dt>
+    <dd><p>The file is flushed everytime that a transaction completes, and a parameter is passed asking
+the OS to flush the file cache to disk. This is a fairly conservative option, and should
+offer the best durability at the cost of performance. This can have wear implications for
+solid state drives as well.</p>
+</dd>
+    <dt id="VestPocket_VestPocketDurability_FlushOnDelay"><code>FlushOnDelay = 2</code></dt>
+    <dd><p>The file is flushed everytime that the transaction queue is drained,
+and a parameter is passed asking the OS to flush the file cache to disk. This
+method offers a good compromise between durability and performance. If a batch
+of transactions is being processed and a power outage occurs while the batch is
+being processed, then some transactions may not be flushed to disk.</p>
+</dd>
+    <dt id="VestPocket_VestPocketDurability_Unknown"><code>Unknown = 0</code></dt>
+    <dd><p>Represents an uninitialized value</p>
+</dd>
+  </dl>
+
+
+
+</article>
+
+
+        
+      </div>
+
+      <div class="affix">
+        <nav id="affix"></nav>
+      </div>
+    </main>
+
+
+    <footer class="border-top">
+      <div class="container-xxl">
+        <div class="flex-fill">
+          <span>Made with <a href="https://dotnet.github.io/docfx">docfx</a></span>
+        </div>
+      </div>
+    </footer>
+  </body>
+</html>

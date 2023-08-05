@@ -220,10 +220,11 @@ internal class Node<T> where T : class, IEntity
     /// <summary>
     /// Looks for a child node that has a key segment that matches part of the prefix of a given key segment
     /// </summary>
-    /// <param name="keySegment"></param>
-    /// <param name="result">The matching child node</param>
-    /// <returns>The number of matching bytes</returns>
-    private Node<T> FindMatchingChild(ReadOnlySpan<char> keySegment, out int bytesMatching, out int matachingIndex)
+    /// <param name="keySegment">The key segment to match on</param>
+    /// <param name="bytesMatching">The number of matching bytes</param>
+    /// <param name="matchingIndex">The index of the match</param>
+    /// <returns></returns>
+    private Node<T> FindMatchingChild(ReadOnlySpan<char> keySegment, out int bytesMatching, out int matchingIndex)
     {
         for (int i = 0; i < Children.Length; i++)
         {
@@ -236,12 +237,12 @@ internal class Node<T> where T : class, IEntity
             if (matchingBytes > 0)
             {
                 bytesMatching = matchingBytes;
-                matachingIndex = i;
+                matchingIndex = i;
                 return child;
             }
         }
         bytesMatching = 0;
-        matachingIndex = -1;
+        matchingIndex = -1;
         return null;
     }
 

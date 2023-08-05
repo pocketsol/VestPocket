@@ -46,11 +46,10 @@ internal class EntityStore<T> where T : class, IEntity
     }
 
     /// <summary>
-    /// Retreives an IEnumerable<T> of all entities that have keys that start with the exact string value of <paramref name="prefix"/>
+    /// Retreives an IEnumerable&lt;T&gt; of all entities that have keys that start with the exact string value of <paramref name="prefix"/>
     /// </summary>
     /// <typeparam name="TSelection">The type that the Entity should be selected as. Must be castable from <typeparamref name="T"/></typeparam>
     /// <param name="prefix">The prefix that will be used to search for matches.</param>
-    /// <param name="sortResults">If the results will be sorted by key when returned.</param>
     /// <returns></returns>
     public PrefixResult<TSelection> GetByPrefix<TSelection>(string prefix) where TSelection : class, T
     {
@@ -84,6 +83,7 @@ internal class EntityStore<T> where T : class, IEntity
                     }
                     else
                     {
+                        transaction.FailedConcurrency = true;
                         transaction.Complete();
                     }
                     return false;
@@ -164,8 +164,7 @@ internal class EntityStore<T> where T : class, IEntity
     /// (such as a VestPocket File). It should not be used in other situations, as it does not enforce
     /// optimistic concurrency. Changes applied in this way are also not written to the <see cref="TransactionLog{T}"/>
     /// </summary>
-    /// <param name="key"></param>
-    /// <param name="entity"></param>
+    /// <param name="entity">The entity to load into the store</param>
     public void LoadChange(T entity)
     {
 

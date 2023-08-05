@@ -8,7 +8,8 @@
 /// They must be configured for System.Text.Json source generator serialization and deserialization
 /// </summary>
 /// <example>
-/// 
+/// Example of a class that implements IEntity and a subclass, both configured for serialization
+/// <code>
 ///     [JsonDerivedType(typeof(Entity), nameof(Entity))]
 ///     [JsonDerivedType(typeof(TestEntity), nameof(TestEntity))]
 ///     public record class Entity(string Key, int Version, bool Deleted, string Body) : IEntity
@@ -21,7 +22,7 @@
 ///     [JsonSourceGenerationOptions(WriteIndented = false)]
 ///     [JsonSerializable(typeof(Entity))]
 ///     internal partial class SourceGenerationContext : JsonSerializerContext { }
-/// 
+/// </code>
 ///</example>
 public interface IEntity
 {
@@ -50,9 +51,12 @@ public interface IEntity
     /// If the entity should be deleted in VestPocket.
     /// </summary>
     /// <example>
+    /// Using the Deleted property to delete an IEntity
+    /// <code>
     /// var toDelete = entity with { Deleted = true };
     /// await connection.Save(toDelete);
     /// var entityRetreived = connection.Get&lt;Entity&gt;(entity.Key); // entityRetreived is null
+    ///</code>
     /// </example>
     public bool Deleted { get; }
 
@@ -64,12 +68,14 @@ public interface IEntity
     /// also appropriate.
     /// </summary>
     /// <example>
+    /// <code>
     /// public IEntity WithVersion(int version)
     /// {
     ///     return this with { Version = version };
     /// }
+    /// </code>
     /// </example>
-    /// <param name="version"></param>
+    /// <param name="version">The new version for the entity</param>
     /// <returns></returns>
     public IEntity WithVersion(int version);
 

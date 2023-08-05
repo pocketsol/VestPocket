@@ -3,7 +3,7 @@
 namespace VestPocket;
 
 /// <summary>
-/// Represents a stream that acts as a view of a subset of another view
+/// Represents a stream that acts as a view of a subset of another stream
 /// Based on a public forum post by Marc Gravell:
 /// https://social.msdn.microsoft.com/Forums/vstudio/en-US/c409b63b-37df-40ca-9322-458ffe06ea48/how-to-access-part-of-a-filestream-or-memorystream?forum=netfxbcl
 /// </summary>
