@@ -51,9 +51,14 @@ internal class EntityStore<T> where T : class, IEntity
     /// <typeparam name="TSelection">The type that the Entity should be selected as. Must be castable from <typeparamref name="T"/></typeparam>
     /// <param name="prefix">The prefix that will be used to search for matches.</param>
     /// <returns></returns>
-    public PrefixResult<TSelection> GetByPrefix<TSelection>(string prefix) where TSelection : class, T
+    public IEnumerable<TSelection> GetByPrefix<TSelection>(string prefix) where TSelection : class, T
     {
-        return lookup.GetByPrefix<TSelection>(prefix);
+        return lookup.GetPrefix<TSelection>(prefix);
+    }
+
+    public IEnumerable<TSelection> GetPrefix<TSelection>(ReadOnlySpan<char> prefix) where TSelection : class, T
+    {
+        return lookup.GetPrefix<TSelection>(prefix);
     }
 
     /// <summary>

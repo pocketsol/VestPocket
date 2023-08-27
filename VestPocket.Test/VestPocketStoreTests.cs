@@ -87,7 +87,7 @@ public class VestPocketStoreTests : IClassFixture<VestPocketStoreFixture>
         string body = "body";
         var expectedDocument = await testStore.Save(new TestDocument(key, 0, false, body));
         var prefixResults = testStore.GetByPrefix<TestDocument>(prefix);
-        var firstMatchByPrefix = prefixResults.Results.FirstOrDefault();
+        var firstMatchByPrefix = prefixResults.FirstOrDefault();
         Assert.Equal(expectedDocument, firstMatchByPrefix);
     }
 
@@ -100,7 +100,7 @@ public class VestPocketStoreTests : IClassFixture<VestPocketStoreFixture>
 
         var expectedDocument = await testStore.Save(new TestDocument(key, 0, false, body));
         var prefixResults = testStore.GetByPrefix<TestDocument>(prefix);
-        var firstMatchByPrefix = prefixResults.Results.FirstOrDefault();
+        var firstMatchByPrefix = prefixResults.FirstOrDefault();
         Assert.Equal(expectedDocument, firstMatchByPrefix);
     }
 

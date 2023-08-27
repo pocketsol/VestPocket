@@ -23,20 +23,24 @@ class Program
         Console.WriteLine("---------Running VestPocket---------");
 
         var options = new VestPocketOptions();
-        options.RewriteRatio = 100;
+        options.RewriteRatio = 1;
 
         connection = new VestPocketStore<Entity>(SourceGenerationContext.Default.Entity, options);
         await connection.OpenAsync(CancellationToken.None);
 
         await TimeIterations("Create Entities", (thread, i) =>
         {
-            var entity = new Entity($"{thread}-{i}", 0, false, $"""Just some body text {thread}-{i}""");
-            if (entity == null)
+            for(int j = 0; j < 1000; j++)
             {
-                throw new Exception();
+                var entity = new Entity($"{thread}-{i}", 0, false, $"""Just some body text {thread}-{i}""");
+                if (entity == null)
+                {
+                    throw new Exception();
+                }
             }
+
             return Task.CompletedTask;
-        }, threads, iterations);
+        }, threads, iterations, 1000);
 
         await TimeIterations("Save Entities", async (thread, i) =>
         {
@@ -47,43 +51,65 @@ class Program
 
         await TimeIterations("Read Entities", (thread, i) =>
         {
-            connection.Get<Entity>($"{thread}-{i}");
+            for(int j = 0; j < 1000; j++)
+            {
+                connection.Get<Entity>($"{thread}-{i}");
+            }
             return Task.CompletedTask;
-        }, threads, iterations);
+        }, threads, iterations, 1000);
 
-        await TimeIterations("Save Entities Batched", async (thread, i) =>
+        await TimeIterations($"Save Entities Batched", async (thread, i) =>
         {
-            if (i != 0)
+            var entities = new Entity[100];
+            int iterationKey = 0;
+            while(iterationKey < iterations)
             {
-                return;
+                for (int j = 0; j < entities.Length; j++)
+                {
+                    iterationKey++;
+                    entities[j] = new Entity($"{thread}-{iterationKey}", 1, false, $"""Just some body text {thread}-{i}""");
+                    if (iterationKey == iterations)
+                    {
+                        break;
+                    }
+                }
+                await connection.Save(entities);
             }
-            var entities = new Entity[iterations];
-            for(int j = 0; j < iterations; j++)
-            {
-                entities[j] = new Entity($"{thread}-{i}", 1, false, $"""Just some body text {thread}-{i}""");
-            }
-            await connection.Save(entities);
-        }, threads, iterations);
+
+        }, threads, 1, iterations);
 
         await connection.ForceMaintenance();
 
         await TimeIterations("Prefix Search", (thread, i) =>
         {
-            using var prefixSearch = connection.GetByPrefix<Entity>(thread.ToString() + "-99");
-            prefixSearch.Dispose();
+            var prefixSearch = connection.GetByPrefix<Entity>(thread.ToString() + "-99");
+            foreach(var result in prefixSearch)
+            {
+                if (result == null)
+                {
+                    throw new Exception("Failed to get prefix result");
+                }
+            }
             return Task.CompletedTask;
         }, threads, iterations);
 
-        await TimeIterations("Read and Write Mix (6 operations)", async (thread, i) =>
+        await TimeIterations("Read and Write Mix", async (thread, i) =>
         {
             var entity = connection.Get<Entity>($"{thread}-{i}");
+
             await connection.Save(entity);
             entity = connection.Get<Entity>($"{thread}-{i}");
             entity = connection.Get<Entity>($"{thread}-{i}");
+
             entity = await connection.Save(entity);
             entity = connection.Get<Entity>($"{thread}-{i}");
             entity = connection.Get<Entity>($"{thread}-{i}");
-        }, threads, iterations);
+
+            entity = await connection.Save(entity);
+            entity = connection.Get<Entity>($"{thread}-{i}");
+            entity = connection.Get<Entity>($"{thread}-{i}");
+
+        }, threads, iterations, 10);
 
         await connection.ForceMaintenance();
 
@@ -115,7 +141,7 @@ class Program
     }
 
 
-    private static async Task TimeIterations(string activityName, Func<int, int, Task> toDo, int threads, int iterations)
+    private static async Task TimeIterations(string activityName, Func<int, int, Task> toDo, int threads, int iterations, double scale = 1)
     {
         var stopwatch = new Stopwatch();
         stopwatch.Start();
@@ -153,14 +179,13 @@ class Program
         stopwatch.Stop();
         var elapsed = stopwatch.Elapsed;
 
-        var totalIterations = threads * iterations;
+        var totalIterations = threads * iterations * scale;
         var throughput = totalIterations / elapsed.TotalSeconds;
 
         var threadMedianSorted = threadLatencyMedian.AsEnumerable().OrderBy(x => x).ToList();
-
         var overallMedian = threadMedianSorted[threadMedianSorted.Count / 2];
         Console.WriteLine();
-        Console.WriteLine($"--{activityName} (threads:{threads}, iterations:{iterations})--");
+        Console.WriteLine($"--{activityName} (threads:{threads}, iterations:{iterations}), ops/iteration:{scale}--");
         Console.WriteLine($"Throughput {throughput.ToString("F0")}/s");
         Console.WriteLine($"Latency Median: {overallMedian.ToString("N6")} Max:{threadLatencyAverages.Max().ToString("N6")}");
     }

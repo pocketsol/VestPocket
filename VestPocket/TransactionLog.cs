@@ -64,7 +64,7 @@ internal class TransactionLog<T> : IDisposable where T : class, IEntity
 
         var itemsRewritten = 0;
 
-        using var allItems = memoryStore.GetByPrefix<T>(string.Empty);
+        var allItems = memoryStore.GetPrefix<T>(string.Empty);
 
         Stream stream = rewriteStream;
         if (isDisposing) { return; }
@@ -93,7 +93,7 @@ internal class TransactionLog<T> : IDisposable where T : class, IEntity
 
         if (!options.CompressOnRewrite)
         {
-            foreach (var item in allItems.Results)
+            foreach (var item in allItems)
             {
                 if (isDisposing) return;
                 JsonSerializer.Serialize(stream, item, jsonTypeInfo);
@@ -467,13 +467,13 @@ internal class TransactionLog<T> : IDisposable where T : class, IEntity
 
     }
 
-    private async IAsyncEnumerable<byte[]> GetCompressedRewriteSegments(PrefixResult<T> entities, [EnumeratorCancellation] CancellationToken cancellationToken)
+    private async IAsyncEnumerable<byte[]> GetCompressedRewriteSegments(IEnumerable<T> entities, [EnumeratorCancellation] CancellationToken cancellationToken)
     {
         using var serializeStream = new MemoryStream();
         var compressedBackingStream = new MemoryStream();
         var brotliStream = new BrotliStream(compressedBackingStream, CompressionLevel.Optimal);
 
-        foreach (var entity in entities.Results)
+        foreach (var entity in entities)
         {
 
             await JsonSerializer.SerializeAsync<T>(serializeStream, entity, jsonTypeInfo, cancellationToken);

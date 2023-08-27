@@ -242,11 +242,11 @@ public class VestPocketStore<TEntity> : IDisposable where TEntity : class, IEnti
     /// <typeparam name="T">The type of entities to retreive</typeparam>
     /// <param name="prefix">The case sensitive key prefix to search for</param>
     /// <returns>tThe search results. PrefixResults implement IDisposable</returns>
-    public PrefixResult<T> GetByPrefix<T>(string prefix) where T : class, TEntity
+    public IEnumerable<T> GetByPrefix<T>(string prefix) where T : class, TEntity
     {
         return entityStore.GetByPrefix<T>(prefix);
     }
-
+    
     /// <summary>
     /// Disposes of the VestPocketStore. This stops processing queued requests and closes
     /// the access to the underlying file of the store (if any).

@@ -21,7 +21,7 @@ internal class PrefixLookup<T> where T : class, IEntity
     /// <summary>
     /// Creates a PrefixLookup of type T.
     /// </summary>
-    /// <param name="readOnly">If read and write access should be syncrhonized behind reader writer locks</param>
+    /// <param name="readOnly">If read and write access should be synchronized behind reader writer locks</param>
     public PrefixLookup(bool readOnly)
     {
         root = new Node<T>();
@@ -50,20 +50,11 @@ internal class PrefixLookup<T> where T : class, IEntity
         this.root.Children = null;
     }
 
-    public PrefixResult<TSelection> GetByPrefix<TSelection>(string keyPrefix) where TSelection : class, T
+
+    public IEnumerable<TSelection> GetPrefix<TSelection>(ReadOnlySpan<char> keyPrefix) where TSelection : class, T
     {
-
-        PrefixResult<TSelection> result = new(keyPrefix);
-        if (keyPrefix == string.Empty)
-        {
-            root.CollectValues(result);
-        }
-        else
-        {
-            root.GetValuesByPrefix(keyPrefix, result);
-        }
-        return result;
-
+        if (keyPrefix.IsEmpty) return root.Collect<TSelection>();
+        return root.EnumeratePrefix<TSelection>(keyPrefix);
     }
 
 }

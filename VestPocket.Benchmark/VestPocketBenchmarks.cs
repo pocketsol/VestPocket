@@ -1,4 +1,5 @@
 ﻿using BenchmarkDotNet.Attributes;
+using BenchmarkDotNet.Jobs;
 
 namespace VestPocket.Benchmark;
 
@@ -21,13 +22,16 @@ public class VestPocketBenchmarks
     private void SetupConnection()
     {
         var dbFile = VestPocketOptions.Default.FilePath;
+
         if (System.IO.File.Exists(dbFile))
         {
             System.IO.File.Delete(dbFile);
         }
 
         var options = new VestPocketOptions();
+        options.FilePath = dbFile;
         options.RewriteRatio = 100;
+        options.Durability = VestPocketDurability.FlushOnDelay;
         store = new VestPocketStore<Entity>(SourceGenerationContext.Default.Entity, options);
         store.OpenAsync(CancellationToken.None).Wait();
 
@@ -49,25 +53,29 @@ public class VestPocketBenchmarks
     public void GetByKey()
     {
         var document = store.Get<Entity>(testKey);
+        if (document == null)
+        {
+            throw new Exception();
+        }
     }
 
-    [Benchmark]
+    //[Benchmark]
     public async Task SetKey()
     {
         testDocument = await store.Save(testDocument);
     }
 
-    [Benchmark]
+    //[Benchmark]
     public async Task SetTenPerTransaction()
     {
         testDocuments = await store.Save(testDocuments);
     }
 
-    [Benchmark]
-    public void GetKeyPrefix()
+    
+    //[Benchmark]
+    public void GetByPrefix()
     {
-        using var prefixSerach = store.GetByPrefix<Entity>("1234");
-        foreach (var result in prefixSerach.Results)
+        foreach (var result in store.GetByPrefix<Entity>("1234"))
         {
             if (result.Key == null)
             {
