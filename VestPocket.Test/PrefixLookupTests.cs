@@ -29,7 +29,12 @@ public class PrefixLookupTests
     }
 
     private Random rng = new(Environment.TickCount);
-    
+
+    /// <summary>
+    /// A rather brutish way to confirm that the results returning from the PrefixLookup are stable
+    /// with a single writer and many readers.
+    /// </summary>
+    /// <returns></returns>
     [Fact]
     public async Task ConcurrentWrite_PrefixLookupResultsAreStable()
     {
@@ -44,7 +49,8 @@ public class PrefixLookupTests
         }
 
         var iterationCount = 0;
-        
+
+
         CancellationTokenSource timeoutCancellation = new(3000);
         var readers = new Task[5];
         while (!timeoutCancellation.IsCancellationRequested)
@@ -54,32 +60,18 @@ public class PrefixLookupTests
 
             var writeTask = Task.Run(() => WriteValues(lookup, expectedValues, iterationCancellation), timeoutCancellation.Token);
 
-
             for (var i = 0; i < readers.Length; i++)
             {
                 readers[i] = Task.Run(() => ReadAndVerifyPrefixValues(lookup, expectedLookup, iterationCancellation.Token), timeoutCancellation.Token);
             }
-            await writeTask;
 
+            await writeTask;
             await Task.WhenAll(readers);
 
             ReadAndVerifyPrefixCounts(lookup, expectedValues);
             iterationCount++;
 
             output.WriteLine($"Completed: {iterationCount} prefix validations ({iterationSize * iterationCount} items)");
-
-            if (writeTask.Exception is not null)
-            {
-                throw writeTask.Exception;
-            }
-
-            foreach (var reader in readers)
-            {
-                if (reader.Exception is not null)
-                {
-                    throw reader.Exception;
-                }
-            }
         }
     }
 
@@ -104,9 +96,14 @@ public class PrefixLookupTests
         {
             var nextKey = rng.Next(0, iterationSize).ToString();
             var queryResult = lookup.GetPrefix<TestEntity>(nextKey);
-
+            int resultCount = 0;
             foreach (var result in queryResult)
             {
+                resultCount++;
+                if (cancellationToken.IsCancellationRequested)
+                {
+                    return;
+                }
                 if (result == null)
                 {
                     throw new NullReferenceException("A PrefixLookup returned a null result");
@@ -123,7 +120,6 @@ public class PrefixLookupTests
 
                 if (!result.Key.StartsWith(nextKey))
                 {
-                    var checkAgain = lookup.GetPrefix<TestEntity>(nextKey);
                     throw new Exception(
                         "ReadAnVerifyPrefixes encountered a prefix result that did not start with the expected prefix");
                 }
@@ -132,7 +128,7 @@ public class PrefixLookupTests
         }
     }
 
-    private async void WriteValues(PrefixLookup<TestEntity> lookup, List<TestEntity> expectedValues, CancellationTokenSource cancellationTokenSource)
+    private void WriteValues(PrefixLookup<TestEntity> lookup, List<TestEntity> expectedValues, CancellationTokenSource cancellationTokenSource)
     {
         // Write keys at random
         for (int i = 0; i < iterationSize; i++)
@@ -148,7 +144,6 @@ public class PrefixLookupTests
             var nextValue = expectedValues[i];
             lookup.Set(i.ToString(), nextValue);
         }
-        //await Task.Delay(1000000);
         cancellationTokenSource.Cancel();
     }
     

@@ -82,13 +82,13 @@ If you attempt to save an entity with a version number that does not match the v
 ## Getting Records by a Key Prefix
  ```csharp
  
-    using var search = await store.GetByPrefix<Entity>("test");
-    foreach(var entity in search.Results)
+    var results = await store.GetByPrefix<Entity>("test");
+    foreach(var entity in results)
     {
         //...
     }
 ```
-Because prefix key searches can be arbitrarily large, the results are stored in pooled arrays to reduce allocations. The prefix results are returned attached to a PrefixResult object wich implements IDisposable.
+
 
 ## Deleting a Record
  ```csharp
@@ -171,20 +171,20 @@ A Vest Pocket store can be backed up by calling the CreateBackup method. While a
 ```console
 // * Summary *
 
-BenchmarkDotNet=v0.13.1, OS=Windows 10.0.19044.2364 (21H2)
+BenchmarkDotNet v0.13.7, Windows 10 (10.0.19044.2728/21H2/November2021Update)
 AMD Ryzen 7 5700G with Radeon Graphics, 1 CPU, 16 logical and 8 physical cores
-.NET SDK=7.0.100
-  [Host]     : .NET 7.0.0 (7.0.22.51805), X64 RyuJIT
-  Job-UUNWYS : .NET 7.0.0 (7.0.22.51805), X64 RyuJIT
+.NET SDK 8.0.100-preview.6.23330.14
+  [Host]     : .NET 7.0.1 (7.0.122.56804), X64 RyuJIT AVX2
+  Job-AXMTRY : .NET 7.0.1 (7.0.122.56804), X64 RyuJIT AVX2
 
 MaxRelativeError=0.05
 
-|               Method |        Mean |     Error |    StdDev |  Gen 0 | Allocated |
-|--------------------- |------------:|----------:|----------:|-------:|----------:|
-|             GetByKey |    53.93 ns |  0.184 ns |  0.172 ns |      - |         - |
-|               SetKey | 3,622.68 ns | 30.250 ns | 26.816 ns | 0.0572 |     504 B |
-| SetTenPerTransaction | 6,878.29 ns | 43.167 ns | 40.379 ns | 0.2594 |   2,232 B |
-|         GetKeyPrefix | 1,251.17 ns | 10.557 ns |  9.875 ns | 0.0095 |      88 B |
+|               Method |        Mean |      Error |     StdDev |   Gen0 |   Gen1 | Allocated |
+|--------------------- |------------:|-----------:|-----------:|-------:|-------:|----------:|
+|             GetByKey |    48.14 ns |   0.331 ns |   0.294 ns |      - |      - |         - |
+|               SetKey | 3,348.92 ns |  17.349 ns |  13.545 ns | 0.1221 | 0.0038 |    1071 B |
+| SetTenPerTransaction | 8,210.59 ns | 410.495 ns | 838.533 ns | 0.2747 |      - |    2317 B |
+|          GetByPrefix |   904.01 ns |   7.648 ns |   6.780 ns | 0.0067 |      - |      56 B |
 
 ```
 Before running the benchmark above, 999,999 entities are stored by key.
@@ -198,41 +198,42 @@ Before running the benchmark above, 999,999 entities are stored by key.
 ```console
 ---------Running VestPocket---------
 
---Create Entities (threads:100, iterations:1000)--
-Throughput 4784987/s
-Latency Median: 0.000200 Max:0.000308
+--Create Entities (threads:100, iterations:1000), ops/iteration:1000--
+Throughput 87545927/s
+Latency Median: 0.167800 Max:0.228166
 
---Save Entities (threads:100, iterations:1000)--
-Throughput 579607/s
-Latency Median: 0.161000 Max:0.172479
+--Save Entities (threads:100, iterations:1000), ops/iteration:1--
+Throughput 582225/s
+Latency Median: 0.157700 Max:0.171643
 
---Read Entities (threads:100, iterations:1000)--
-Throughput 36473721/s
-Latency Median: 0.000500 Max:0.000451
+--Read Entities (threads:100, iterations:1000), ops/iteration:1000--
+Throughput 87207429/s
+Latency Median: 0.161500 Max:0.303443
 
---Save Entities Batched (threads:100, iterations:1000)--
-Throughput 1436453/s
-Latency Median: 0.000000 Max:0.069562
+--Save Entities Batched (threads:100, iterations:1), ops/iteration:1000--
+Throughput 946897/s
+Latency Median: 100.464300 Max:105.435100
 
---Prefix Search (threads:100, iterations:1000)--
-Throughput 1721888/s
-Latency Median: 0.000700 Max:0.057871
+--Prefix Search (threads:100, iterations:1000), ops/iteration:1--
+Throughput 9532071/s
+Latency Median: 0.000400 Max:0.007377
 
---Read and Write Mix (6 operations) (threads:100, iterations:1000)--
-Throughput 318401/s
-Latency Median: 0.294100 Max:0.314021
+--Read and Write Mix (threads:100, iterations:1000), ops/iteration:10--
+Throughput 2366153/s
+Latency Median: 0.562700 Max:0.422535
 
 -----Transaction Metrics-------------
-Transaction Count: 300100
-Flush Count: 3001
-Validation Time: 1.8us
-Serialization Time: 1.4us
-Serialized Bytes: 38654094
-Queue Length: 100
+Transaction Count: 401000
+Flush Count: 5
+Validation Time: 1.7us
+Serialization Time: 1.3us
+Serialized Bytes: 48034394
+Queue Length: 66833
 ```
 
 BenchmarkDotNet tests are great for testing the timing and overhead of individual operations, but are less useful for showing the impact of a library or system when under load from many asynchronous requests at a time. VestPocket.ConsoleTest contains a rudementary test that attempts to measure the requests per second of various VestPocket methods. The 'Read and Write Mix' performs two save operations and gets four values by key.
 
+This test was performed with AOT against the same machine as the above Benchmark.NET test (Against a file stored on an NVmE drive).
 
 # VestPocketOptions
 

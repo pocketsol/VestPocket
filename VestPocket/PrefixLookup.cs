@@ -13,7 +13,7 @@
 internal class PrefixLookup<T> where T : class, IEntity
 {
 
-    private readonly Node<T> root;
+    private Node<T> root;
     private bool readOnly;
 
     internal bool ReadOnly { get => readOnly; set => readOnly = value; }
@@ -32,13 +32,13 @@ internal class PrefixLookup<T> where T : class, IEntity
 
     public int Count => root.GetValuesCount();
 
-    public void Set(ReadOnlySpan<char> keyBytes, T value)
+    public void Set(in ReadOnlySpan<char> keyBytes, T value)
     {
         if (readOnly) throw new InvalidOperationException("Cannot set values in a PrefixLookup that is read only");
-        root.SetValue(keyBytes, value);
+        root.SetValue(ref root, keyBytes, value);
     }
 
-    public T Get(ReadOnlySpan<char> key)
+    public T Get(in ReadOnlySpan<char> key)
     {
         return root.GetValue(key)?.Value;
     }

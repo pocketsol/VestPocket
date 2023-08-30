@@ -30,8 +30,9 @@ public class VestPocketBenchmarks
 
         var options = new VestPocketOptions();
         options.FilePath = dbFile;
-        options.RewriteRatio = 100;
+        options.RewriteRatio = 1;
         options.Durability = VestPocketDurability.FlushOnDelay;
+        
         store = new VestPocketStore<Entity>(SourceGenerationContext.Default.Entity, options);
         store.OpenAsync(CancellationToken.None).Wait();
 
@@ -59,20 +60,20 @@ public class VestPocketBenchmarks
         }
     }
 
-    //[Benchmark]
+    [Benchmark]
     public async Task SetKey()
     {
         testDocument = await store.Save(testDocument);
     }
 
-    //[Benchmark]
+    [Benchmark]
     public async Task SetTenPerTransaction()
     {
         testDocuments = await store.Save(testDocuments);
     }
 
     
-    //[Benchmark]
+    [Benchmark]
     public void GetByPrefix()
     {
         foreach (var result in store.GetByPrefix<Entity>("1234"))

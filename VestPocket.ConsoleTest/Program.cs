@@ -15,7 +15,6 @@ class Program
 
     static async Task Main(string[] args)
     {
-        RemoveDatabaseFile();
 
         int threads = 100;
         int iterations = 1000;
@@ -23,6 +22,7 @@ class Program
         Console.WriteLine("---------Running VestPocket---------");
 
         var options = new VestPocketOptions();
+        options.FilePath = null;
         options.RewriteRatio = 1;
 
         connection = new VestPocketStore<Entity>(SourceGenerationContext.Default.Entity, options);
@@ -30,7 +30,7 @@ class Program
 
         await TimeIterations("Create Entities", (thread, i) =>
         {
-            for(int j = 0; j < 1000; j++)
+            for (int j = 0; j < 1000; j++)
             {
                 var entity = new Entity($"{thread}-{i}", 0, false, $"""Just some body text {thread}-{i}""");
                 if (entity == null)
@@ -51,7 +51,7 @@ class Program
 
         await TimeIterations("Read Entities", (thread, i) =>
         {
-            for(int j = 0; j < 1000; j++)
+            for (int j = 0; j < 1000; j++)
             {
                 connection.Get<Entity>($"{thread}-{i}");
             }
@@ -62,7 +62,7 @@ class Program
         {
             var entities = new Entity[100];
             int iterationKey = 0;
-            while(iterationKey < iterations)
+            while (iterationKey < iterations)
             {
                 for (int j = 0; j < entities.Length; j++)
                 {
@@ -127,13 +127,12 @@ class Program
         connection.Dispose();
         Console.WriteLine();
 
-        RemoveDatabaseFile();
 
     }
 
-    private static void RemoveDatabaseFile()
+    private static void RemoveDatabaseFile(VestPocketOptions options)
     {
-        var fileName = VestPocketOptions.Default.FilePath;
+        var fileName = options.FilePath;
         if (System.IO.File.Exists(fileName))
         {
             System.IO.File.Delete(fileName);
