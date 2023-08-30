@@ -5,7 +5,7 @@
     <PackageId>VestPocket</PackageId>
     <Title>Vest Pocket</Title>
     <Version>0.1.13</Version>
-    <Authors>keithhwill</Authors>
+    <Authors>keithwill</Authors>
     <Description>
       A lookup that is persisted to an append-only file. It supports immutable records, optimistic concurrency,
       key prefix lookups, AOT friendly serialization, and an on-disk format that can be merged using conventional merge tools.
