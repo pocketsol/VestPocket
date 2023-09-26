@@ -16,8 +16,8 @@ class Program
     static async Task Main(string[] args)
     {
 
-        int threads = 100;
-        int iterations = 1000;
+        int threads = 15;
+        int iterations = 10000;
 
         Console.WriteLine("---------Running VestPocket---------");
 

@@ -57,14 +57,13 @@ internal class TransactionLog<T> : IDisposable where T : class, IEntity
         this.options = options;
     }
 
-    private async Task Rewrite(bool isBackup)
+    private void Rewrite(bool isBackup)
     {
         rewriteReadyToComplete = false;
         rewriteIsBackup = isBackup;
 
         var itemsRewritten = 0;
 
-        var allItems = memoryStore.GetPrefix<T>(string.Empty);
 
         Stream stream = rewriteStream;
         if (isDisposing) { return; }
@@ -77,23 +76,23 @@ internal class TransactionLog<T> : IDisposable where T : class, IEntity
 
         if (options.CompressOnRewrite)
         {
+            var allItems = memoryStore.Lookup.SearchValues(ReadOnlySpan<byte>.Empty);
             header.CompressedEntities = GetCompressedRewriteSegments(allItems, CancellationToken.None);
         }
 
         this.header.LastRewrite = DateTimeOffset.Now;
 
-        await JsonSerializer.SerializeAsync(
+        JsonSerializer.Serialize(
             rewriteStream,
             header,
-            InternalSerializationContext.Default.StoreHeader,
-            CancellationToken.None
+            InternalSerializationContext.Default.StoreHeader
         );
 
         rewriteStream.Write(LF, 0, 1);
 
         if (!options.CompressOnRewrite)
         {
-            foreach (var item in allItems)
+            foreach (var item in memoryStore.Lookup.SearchValues(ReadOnlySpan<byte>.Empty))
             {
                 if (isDisposing) return;
                 JsonSerializer.Serialize(stream, item, jsonTypeInfo);

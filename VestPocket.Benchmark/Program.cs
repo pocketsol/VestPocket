@@ -1,4 +1,5 @@
 ﻿using BenchmarkDotNet.Configs;
+using BenchmarkDotNet.Diagnosers;
 using BenchmarkDotNet.Environments;
 using BenchmarkDotNet.Jobs;
 using BenchmarkDotNet.Running;
@@ -10,7 +11,9 @@ public class Program
     {
         var summary = BenchmarkRunner.Run<VestPocketBenchmarks>(
             config: DefaultConfig.Instance
-                .AddJob(Job.Default.WithMaxRelativeError(.05))
+                .AddDiagnoser(EventPipeProfiler.Default)
+                .AddJob(Job.Default.WithMaxRelativeError(.05)),
+            args: args
         );
     }
 }

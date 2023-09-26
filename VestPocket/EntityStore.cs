@@ -1,22 +1,32 @@
-﻿namespace VestPocket;
+﻿using TrieHard.Collections;
+
+namespace VestPocket;
 
 /// <summary>
 /// A light transactional wrapper around storing entities in memory.
-/// The in-memory representation is implemented using a <see cref="PrefixLookup{T}"/>.
+/// The in-memory representation is implemented using a <see cref="RadixTree{T}"/>.
 /// </summary>
-internal class EntityStore<T> where T : class, IEntity
+internal class EntityStore<T> : IDisposable where T : class, IEntity
 {
 
-    private readonly PrefixLookup<T> lookup;
-    private readonly bool readOnly;
+    /// <summary>
+    /// For performance reasons we'll leak the implementation of the backing lookup
+    /// </summary>
+    internal readonly RadixTree<T> Lookup;
+
+    private bool readOnly;
+    private bool originalReadOnly;
     private long deadEntityCount;
     private long entityCount;
     public long DeadEntityCount => deadEntityCount;
     public long EntityCount => entityCount;
+
+    private bool disposed = false;
     public EntityStore(bool readOnly)
     {
-        lookup = new(readOnly);
+        Lookup = new();
         this.readOnly = readOnly;
+        this.originalReadOnly = readOnly;
     }
 
     /// <summary>
@@ -25,40 +35,35 @@ internal class EntityStore<T> where T : class, IEntity
     /// </summary>
     internal void BeginLoading()
     {
-        lookup.ReadOnly = false;
+        readOnly = false;
     }
 
     internal void EndLoading()
     {
-        lookup.ReadOnly = this.readOnly;
+        readOnly = this.originalReadOnly;
     }
 
     /// <summary>
-    /// Retreives an entity by its key value, using an exact (case sensitive) match.
+    /// Retrieves an entity by its key value, using an exact (case sensitive) match.
     /// </summary>
     /// <param name="key">The key of the entity to find</param>
     /// <returns>Returns an Entity of type T, or null if the entity is not found or has been deleted</returns>
     public T Get(string key)
     {
-        var result = lookup.Get(key);
+        var result = Lookup[key];
         if (result == null) { return null; }
         return result.Deleted ? null : result;
     }
 
     /// <summary>
-    /// Retreives an IEnumerable&lt;T&gt; of all entities that have keys that start with the exact string value of <paramref name="prefix"/>
+    /// Retrieves an IEnumerable&lt;T&gt; of all entities that have keys that start with the exact string value of <paramref name="prefix"/>
     /// </summary>
     /// <typeparam name="TSelection">The type that the Entity should be selected as. Must be castable from <typeparamref name="T"/></typeparam>
     /// <param name="prefix">The prefix that will be used to search for matches.</param>
     /// <returns></returns>
     public IEnumerable<TSelection> GetByPrefix<TSelection>(string prefix) where TSelection : class, T
     {
-        return lookup.GetPrefix<TSelection>(prefix);
-    }
-
-    public IEnumerable<TSelection> GetPrefix<TSelection>(ReadOnlySpan<char> prefix) where TSelection : class, T
-    {
-        return lookup.GetPrefix<TSelection>(prefix);
+        return Lookup.SearchValues(prefix).Cast<TSelection>();
     }
 
     /// <summary>
@@ -68,11 +73,12 @@ internal class EntityStore<T> where T : class, IEntity
     /// <returns>Returns true if the transaction was applied without encountering a <see cref="ConcurrencyException"/>, false if one was set on the result of the transaction.</returns>
     public bool ProcessTransaction(Transaction<T> transaction)
     {
+        if (readOnly) throw new InvalidOperationException("The store is marked readonly and cannot accept transactions");
         if (transaction.IsSingleChange)
         {
             var entity = transaction.Entity;
 
-            var existingDocument = lookup.Get(entity.Key);
+            var existingDocument = Lookup[entity.Key];
             if (existingDocument != null)
             {
 
@@ -101,7 +107,8 @@ internal class EntityStore<T> where T : class, IEntity
             }
 
             entity = (T)entity.WithVersion(entity.Version + 1);
-            lookup.Set(entity.Key, entity);
+            Lookup[entity.Key] = entity;
+            //Lookup.Set(entity.Key, entity);
 
             transaction.Entity = entity;
         }
@@ -113,7 +120,7 @@ internal class EntityStore<T> where T : class, IEntity
             for (int i = 0; i < transaction.Entities.Length; i++)
             {
                 var entity = transaction.Entities[i];
-                var existingDocument = lookup.Get(entity.Key);
+                var existingDocument = Lookup[entity.Key];
 
                 if (existingDocument != null)
                 {
@@ -155,7 +162,7 @@ internal class EntityStore<T> where T : class, IEntity
             {
                 var change = transaction.Entities[i];
                 change = (T)change.WithVersion(change.Version + 1);
-                lookup.Set(change.Key, change);
+                Lookup[change.Key] = change;
                 transaction.Entities[i] = change;
             }
         }
@@ -173,26 +180,26 @@ internal class EntityStore<T> where T : class, IEntity
     public void LoadChange(T entity)
     {
 
-        var existingRecord = lookup.Get(entity.Key);
+        var existingRecord = Lookup[entity.Key];
         if (existingRecord != null)
         {
             if (entity.Version > existingRecord.Version)
             {
-                lookup.Set(entity.Key, entity);
+                Lookup[entity.Key] = entity;
             }
             deadEntityCount++;
         }
         else
         {
             entityCount++;
-            lookup.Set(entity.Key, entity);
+            Lookup[entity.Key] = entity;
         }
     }
 
 
     public void RemoveAllDocuments()
     {
-        lookup.Clear();
+        Lookup.Clear();
     }
 
     public void IncrementDeadEntities()
@@ -205,4 +212,11 @@ internal class EntityStore<T> where T : class, IEntity
         deadEntityCount = 0;
     }
 
+    public void Dispose()
+    {
+        if (!disposed)
+        {
+            //Lookup.Dispose();
+        }
+    }
 }

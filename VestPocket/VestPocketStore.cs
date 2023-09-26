@@ -239,7 +239,7 @@ public class VestPocketStore<TEntity> : IDisposable where TEntity : class, IEnti
     /// Performs a prefix search for values that have keys starting with the supplied 
     /// prefix value.
     /// </summary>
-    /// <typeparam name="T">The type of entities to retreive</typeparam>
+    /// <typeparam name="T">The type of entities to retrieve</typeparam>
     /// <param name="prefix">The case sensitive key prefix to search for</param>
     /// <returns>tThe search results. PrefixResults implement IDisposable</returns>
     public IEnumerable<T> GetByPrefix<T>(string prefix) where T : class, TEntity
