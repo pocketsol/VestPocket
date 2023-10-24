@@ -1,10 +1,10 @@
-﻿using TrieHard.Collections;
+﻿using TrieHard.PrefixLookup;
 
 namespace VestPocket;
 
 /// <summary>
 /// A light transactional wrapper around storing entities in memory.
-/// The in-memory representation is implemented using a <see cref="RadixTree{T}"/>.
+/// The in-memory representation is implemented using a <see cref="PrefixLookup{T}"/>.
 /// </summary>
 internal class EntityStore<T> : IDisposable where T : class, IEntity
 {
@@ -12,7 +12,7 @@ internal class EntityStore<T> : IDisposable where T : class, IEntity
     /// <summary>
     /// For performance reasons we'll leak the implementation of the backing lookup
     /// </summary>
-    internal readonly RadixTree<T> Lookup;
+    internal readonly PrefixLookup<T> Lookup;
 
     private bool readOnly;
     private bool originalReadOnly;
