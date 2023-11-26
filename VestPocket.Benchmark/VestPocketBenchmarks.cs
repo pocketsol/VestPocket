@@ -23,15 +23,15 @@ public class VestPocketBenchmarks
     {
         var dbFile = VestPocketOptions.Default.FilePath;
 
-        if (System.IO.File.Exists(dbFile))
+        if (File.Exists(dbFile))
         {
-            System.IO.File.Delete(dbFile);
+            File.Delete(dbFile);
         }
 
         var options = new VestPocketOptions();
         options.FilePath = dbFile;
         options.RewriteRatio = 1;
-        options.Durability = VestPocketDurability.FlushOnDelay;
+        options.Durability = VestPocketDurability.FileSystemCache;
         
         store = new VestPocketStore<Entity>(SourceGenerationContext.Default.Entity, options);
         store.OpenAsync(CancellationToken.None).Wait();
@@ -53,7 +53,7 @@ public class VestPocketBenchmarks
     [Benchmark]
     public void GetByKey()
     {
-        var document = store.Get<Entity>(testKey);
+        var document = store.Get(testKey);
         if (document == null)
         {
             throw new Exception();
@@ -77,6 +77,18 @@ public class VestPocketBenchmarks
     public void GetByPrefix()
     {
         foreach (var result in store.GetByPrefix<Entity>("1234"))
+        {
+            if (result.Key == null)
+            {
+                throw new Exception();
+            }
+        }
+    }
+
+    [Benchmark]
+    public void GetByPrefix_BaseType()
+    {
+        foreach (var result in store.GetByPrefix("1234"))
         {
             if (result.Key == null)
             {

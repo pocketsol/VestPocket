@@ -8,7 +8,6 @@ public class TransactionMetrics
 {
     internal long transactionCount;
     internal TimeSpan validationTime;
-    internal TimeSpan serializationTime;
     internal long queueWaits;
     internal long bytesSerialized;
     internal long flushCount;
@@ -28,11 +27,6 @@ public class TransactionMetrics
     /// exist and if the incoming version matches the version stored in the VestPcketStore).
     /// </summary>
     public TimeSpan AverageValidationTime => transactionCount == 0 ? TimeSpan.Zero : validationTime / transactionCount;
-
-    /// <summary>
-    /// The average amount of time this VestPocketStore has spent serializing transactions to the output file/stream.
-    /// </summary>
-    public TimeSpan AverageSerializationTime => transactionCount == 0 ? TimeSpan.Zero : serializationTime / transactionCount;
 
     /// <summary>
     /// The total number of bytes serialized as JSON to the output file/stream.

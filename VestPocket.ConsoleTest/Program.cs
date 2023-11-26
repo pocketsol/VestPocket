@@ -3,7 +3,6 @@ using System.Diagnostics;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
-using System.Collections.Concurrent;
 
 namespace VestPocket.ConsoleTest;
 
@@ -25,6 +24,7 @@ class Program
         options.FilePath = null;
         options.RewriteRatio = 1;
 
+        RemoveDatabaseFile(options);
         connection = new VestPocketStore<Entity>(SourceGenerationContext.Default.Entity, options);
         await connection.OpenAsync(CancellationToken.None);
 
@@ -53,7 +53,7 @@ class Program
         {
             for (int j = 0; j < 1000; j++)
             {
-                connection.Get<Entity>($"{thread}-{i}");
+                connection.Get($"{thread}-{i}");
             }
             return Task.CompletedTask;
         }, threads, iterations, 1000);
@@ -118,7 +118,6 @@ class Program
         Console.WriteLine($"Transaction Count: {connection.TransactionMetrics.TransactionCount}");
         Console.WriteLine($"Flush Count: {connection.TransactionMetrics.FlushCount}");
         Console.WriteLine($"Validation Time: {connection.TransactionMetrics.AverageValidationTime.TotalMicroseconds}us");
-        Console.WriteLine($"Serialization Time: {connection.TransactionMetrics.AverageSerializationTime.TotalMicroseconds}us");
         Console.WriteLine($"Serialized Bytes: {connection.TransactionMetrics.BytesSerialized}");
 
         Console.WriteLine($"Queue Length: {connection.TransactionMetrics.AverageQueueLength}");
@@ -126,19 +125,16 @@ class Program
         await connection.Close(CancellationToken.None);
         connection.Dispose();
         Console.WriteLine();
-
-
     }
 
     private static void RemoveDatabaseFile(VestPocketOptions options)
     {
         var fileName = options.FilePath;
-        if (System.IO.File.Exists(fileName))
+        if (fileName is not null && System.IO.File.Exists(fileName))
         {
             System.IO.File.Delete(fileName);
         }
     }
-
 
     private static async Task TimeIterations(string activityName, Func<int, int, Task> toDo, int threads, int iterations, double scale = 1)
     {

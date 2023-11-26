@@ -67,6 +67,16 @@ internal class EntityStore<T> : IDisposable where T : class, IEntity
     }
 
     /// <summary>
+    /// Retrieves an IEnumerable&lt;T&gt; of all entities that have keys that start with the exact string value of <paramref name="prefix"/>
+    /// </summary>
+    /// <param name="prefix">The prefix that will be used to search for matches.</param>
+    /// <returns></returns>
+    public PrefixLookup<T>.ValueEnumerator GetByPrefix(string prefix)
+    {
+        return Lookup.SearchValues(prefix);
+    }
+
+    /// <summary>
     /// Applies a transaction, with one or more changes, to the entity store and sets any concurrency errors encountered.
     /// </summary>
     /// <param name="transaction">The transaction to apply to the Entity Store</param>

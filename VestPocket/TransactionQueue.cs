@@ -73,36 +73,22 @@ internal class TransactionQueue<TBaseType> where TBaseType : class, IEntity
                 sw.Restart();
                 do
                 {
-
                     if (transaction.NoOp)
                     {
                         transaction.Complete();
                         continue;
                     }
-
                     var appliedInMemory = memoryStore.ProcessTransaction(transaction);
                     this.Metrics.validationTime += sw.Elapsed;
 
                     if (appliedInMemory)
                     {
-                        sw.Restart();
                         this.Metrics.bytesSerialized += transactionStore.WriteTransaction(transaction);
-                        this.Metrics.serializationTime += sw.Elapsed;
                     }
                     this.Metrics.transactionCount++;
-                    if (options.Durability == VestPocketDurability.FlushEachTransaction)
-                    {
-                        transactionStore.Flush();
-                        this.Metrics.flushCount++;
-                    }
                 } while (queueItemChannel.Reader.TryRead(out transaction));
 
-                if (options.Durability != VestPocketDurability.FlushEachTransaction)
-                {
-                    transactionStore.Flush();
-                    this.Metrics.flushCount++;
-                }
-                this.transactionStore.CheckForMaintenance();
+                transactionStore.ProcessDelay();
             }
         }
         catch (OperationCanceledException)

@@ -35,6 +35,9 @@ internal class TransactionLog<T> : IDisposable where T : class, IEntity
     private bool rewriteReadyToComplete = false;
     private bool rewriteIsBackup = false;
 
+    private bool hasFlushableOutput;
+    private bool flushIntermediateFileBuffers;
+
     public bool RewriteReadyToComplete { get => rewriteReadyToComplete; }
 
     public TransactionLog(
@@ -55,6 +58,10 @@ internal class TransactionLog<T> : IDisposable where T : class, IEntity
         this.memoryStore = memoryStore;
         this.jsonTypeInfo = jsonTypeInfo;
         this.options = options;
+
+        this.hasFlushableOutput = fileOutputStream != null;
+        this.flushIntermediateFileBuffers = hasFlushableOutput && 
+            options.Durability != VestPocketDurability.FileSystemCache;
     }
 
     private void Rewrite(bool isBackup)
@@ -130,25 +137,21 @@ internal class TransactionLog<T> : IDisposable where T : class, IEntity
         }
     }
 
+    public void ProcessDelay()
+    {
+        Flush();
+        CheckForMaintenance();
+    }
+
     public void Flush()
     {
-        lock(rewriteLock)
+        if (hasFlushableOutput)
         {
-            if (fileOutputStream != null)
+            lock (rewriteLock)
             {
-                if (options.Durability == VestPocketDurability.FileSystemCache)
-                {
-                    fileOutputStream.Flush(false);
-                }
-                else
-                {
-                    fileOutputStream.Flush(true);
-                }
+                fileOutputStream.Flush(this.flushIntermediateFileBuffers);
             }
-            else
-            {
-                outputStream.Flush();
-            }
+            store.TransactionMetrics.flushCount += 1;
         }
     }
 
@@ -226,7 +229,6 @@ internal class TransactionLog<T> : IDisposable where T : class, IEntity
 
                 }
             }
-
         }
 
         await foreach (var entity in ReadEntitiesFromStream(outputStream, findNewLineBuffer, cancellationToken))
@@ -331,29 +333,23 @@ internal class TransactionLog<T> : IDisposable where T : class, IEntity
 
     public long WriteTransaction(Transaction<T> transaction)
     {
-        long bytesWritten = 0;
-        if (transaction.IsSingleChange)
-        {
-            bytesWritten = WriteDocumentChange(transaction.Entity);
-        }
-        else
-        {
-            for (int i = 0; i < transaction.Entities.Length; i++)
-            {
-                bytesWritten += WriteDocumentChange(transaction.Entities[i]);
-            }
-        }
+        long bytesWritten = WriteDocumentPayload(transaction.payload);
         transaction.Complete();
+        if (options.Durability == VestPocketDurability.FlushEachTransaction)
+        {
+            Flush();
+        }
         return bytesWritten;
     }
 
     private readonly byte[] LF = new byte[] { 10 };
     private const byte LF_Byte = 10;
 
-    private long WriteDocumentChange(T entity)
+    public long WriteDocumentPayload(in ReadOnlyMemory<byte> payload)
     {
         long startingPosition;
         long endingPosition;
+        var payloadSpan = payload.Span;
 
         startingPosition = outputStream.Position;
 
@@ -363,9 +359,7 @@ internal class TransactionLog<T> : IDisposable where T : class, IEntity
             JsonSerializer.Serialize(outputStream, this.header, InternalSerializationContext.Default.StoreHeader);
             outputStream.Write(LF, 0, 1);
         }
-
-        JsonSerializer.Serialize(outputStream, entity, jsonTypeInfo);
-        outputStream.Write(LF, 0, 1);
+        outputStream.Write(payloadSpan);
 
         var written = outputStream.Position - startingPosition;
         unflushed += (int)written;
@@ -374,15 +368,13 @@ internal class TransactionLog<T> : IDisposable where T : class, IEntity
         {
             if (rewriteTailBuffer != null)
             {
-                JsonSerializer.Serialize(rewriteTailBuffer, entity, jsonTypeInfo);
-                rewriteTailBuffer.Write(LF, 0, 1);
+                outputStream.Write(payloadSpan);
             }
         }
 
         endingPosition = outputStream.Position;
 
         return endingPosition - startingPosition;
-
     }
 
     public void CheckForMaintenance()
@@ -461,9 +453,7 @@ internal class TransactionLog<T> : IDisposable where T : class, IEntity
             await rewriteTask;
             await store.QueueNoOpTransaction();
             break;
-
         }
-
     }
 
     private async IAsyncEnumerable<byte[]> GetCompressedRewriteSegments(IEnumerable<T> entities, [EnumeratorCancellation] CancellationToken cancellationToken)
@@ -474,7 +464,6 @@ internal class TransactionLog<T> : IDisposable where T : class, IEntity
 
         foreach (var entity in entities)
         {
-
             await JsonSerializer.SerializeAsync<T>(serializeStream, entity, jsonTypeInfo, cancellationToken);
             serializeStream.Write(LF, 0, 1);
 

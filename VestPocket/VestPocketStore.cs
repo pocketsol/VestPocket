@@ -1,5 +1,9 @@
-﻿using System.IO;
+﻿using System.Buffers;
+using System.IO;
+using System.Text.Json;
 using System.Text.Json.Serialization.Metadata;
+using DotNext.Buffers;
+using TrieHard.PrefixLookup;
 
 namespace VestPocket;
 
@@ -12,6 +16,8 @@ public class VestPocketStore<TEntity> : IDisposable where TEntity : class, IEnti
 {
     private readonly VestPocketOptions options;
     private readonly JsonTypeInfo<TEntity> jsonTypeInfo;
+    private readonly JsonWriterOptions jsonWriterOptions;
+    private const byte LF_Byte = 10;
 
     private TransactionQueue<TEntity> transactionQueue;
     private TransactionLog<TEntity> transactionStore;
@@ -57,6 +63,11 @@ public class VestPocketStore<TEntity> : IDisposable where TEntity : class, IEnti
     {
         this.options = options;
         this.jsonTypeInfo = jsonTypeInfo;
+        this.jsonWriterOptions = new JsonWriterOptions()
+        {
+            Indented = false,
+            SkipValidation = true
+        };
         ValidateOptions();
     }
 
@@ -169,6 +180,14 @@ public class VestPocketStore<TEntity> : IDisposable where TEntity : class, IEnti
     {
         EnsureWriteAccess();
         var transaction = new Transaction<TEntity>(entities, true);
+        using var buffer = new PooledArrayBufferWriter<byte>();
+        using var writer = new Utf8JsonWriter(buffer, jsonWriterOptions);
+        foreach(var entity in entities)
+        {
+            JsonSerializer.Serialize(writer, entity, jsonTypeInfo);
+            buffer.Write(LF_Byte);
+        }
+        transaction.payload = buffer.WrittenMemory;
         transactionQueue.Enqueue(transaction);
         await transaction.Task;
         return transaction.Entities;
@@ -186,6 +205,14 @@ public class VestPocketStore<TEntity> : IDisposable where TEntity : class, IEnti
     {
         EnsureWriteAccess();
         var transaction = new Transaction<TEntity>(entities, false);
+        using var buffer = new PooledArrayBufferWriter<byte>();
+        var writer = new Utf8JsonWriter(buffer, jsonWriterOptions);
+        foreach (var entity in entities)
+        {
+            JsonSerializer.Serialize(writer, entity, jsonTypeInfo);
+            buffer.Write(LF_Byte);
+        }
+        transaction.payload = buffer.WrittenMemory;
         transactionQueue.Enqueue(transaction);
         await transaction.Task;
         return !transaction.FailedConcurrency;
@@ -203,6 +230,11 @@ public class VestPocketStore<TEntity> : IDisposable where TEntity : class, IEnti
     {
         EnsureWriteAccess();
         var transaction = new Transaction<TEntity>(entity, true);
+        using var buffer = new PooledArrayBufferWriter<byte>();
+        using var writer = new Utf8JsonWriter(buffer, jsonWriterOptions);
+        JsonSerializer.Serialize(writer, entity, jsonTypeInfo);
+        buffer.Write(LF_Byte);
+        transaction.payload = buffer.WrittenMemory;
         transactionQueue.Enqueue(transaction);
         await transaction.Task.ConfigureAwait(false);
         return (T)transaction.Entity;
@@ -219,6 +251,11 @@ public class VestPocketStore<TEntity> : IDisposable where TEntity : class, IEnti
     {
         EnsureWriteAccess();
         var transaction = new Transaction<TEntity>(entity, false);
+        using var buffer = new PooledArrayBufferWriter<byte>();
+        var writer = new Utf8JsonWriter(buffer, jsonWriterOptions);
+        JsonSerializer.Serialize(writer, entity, jsonTypeInfo);
+        buffer.Write(LF_Byte);
+        transaction.payload = buffer.WrittenMemory;
         transactionQueue.Enqueue(transaction);
         await transaction.Task.ConfigureAwait(false);
         return !transaction.FailedConcurrency;
@@ -236,6 +273,16 @@ public class VestPocketStore<TEntity> : IDisposable where TEntity : class, IEnti
     }
 
     /// <summary>
+    /// Looks up an entity by key. Returned as a base entity type
+    /// </summary>
+    /// <param name="key">The exact key of the entity to find</param>
+    /// <returns>The entity stored with the key specified or null</returns>
+    public TEntity Get(string key)
+    {
+        return entityStore.Get(key);
+    }
+
+    /// <summary>
     /// Performs a prefix search for values that have keys starting with the supplied 
     /// prefix value.
     /// </summary>
@@ -246,7 +293,17 @@ public class VestPocketStore<TEntity> : IDisposable where TEntity : class, IEnti
     {
         return entityStore.GetByPrefix<T>(prefix);
     }
-    
+
+    /// <summary>
+    /// Performs a prefix search for values that have keys starting with the supplied 
+    /// prefix value.
+    /// </summary>
+    /// <param name="prefix">The case sensitive key prefix to search for</param>
+    public PrefixLookup<TEntity>.ValueEnumerator GetByPrefix(string prefix)
+    {
+        return entityStore.GetByPrefix(prefix);
+    }
+
     /// <summary>
     /// Disposes of the VestPocketStore. This stops processing queued requests and closes
     /// the access to the underlying file of the store (if any).
