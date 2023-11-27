@@ -1,5 +1,4 @@
-﻿using System.Collections.Concurrent;
-using System.Diagnostics;
+﻿using System.Diagnostics;
 using System.Threading.Channels;
 
 namespace VestPocket;
@@ -14,7 +13,6 @@ internal class TransactionQueue<TBaseType> where TBaseType : class, IEntity
 {
     private readonly TransactionLog<TBaseType> transactionStore;
     private readonly EntityStore<TBaseType> memoryStore;
-    private readonly VestPocketOptions options;
     private Task processQueuesTask;
     private CancellationTokenSource processQueuesCancellationTokenSource;
     private readonly Channel<Transaction<TBaseType>> queueItemChannel;
@@ -24,14 +22,12 @@ internal class TransactionQueue<TBaseType> where TBaseType : class, IEntity
 
     public TransactionQueue(
         TransactionLog<TBaseType> transactionStore,
-        EntityStore<TBaseType> memoryStore,
-        VestPocketOptions options
+        EntityStore<TBaseType> memoryStore
     )
     {
         this.queueItemChannel = Channel.CreateUnbounded<Transaction<TBaseType>>(new UnboundedChannelOptions { SingleReader = true, AllowSynchronousContinuations = false });
         this.transactionStore = transactionStore;
         this.memoryStore = memoryStore;
-        this.options = options;
     }
 
     public Task Start()

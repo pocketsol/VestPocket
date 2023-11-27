@@ -93,17 +93,6 @@ internal class ViewStream : Stream
         // We explicitly want this stream to be reusable
         // it doesn't need to dispose like a normal stream
         // since all resources are in the base stream
-
-        //base.Dispose(disposing);
-        //if (disposing)
-        //{
-        //    if (baseStream != null)
-        //    {
-        //        try { baseStream.Dispose(); }
-        //        catch { }
-        //        baseStream = null;
-        //    }
-        //}
     }
 
     public override void Write(byte[] buffer, int offset, int count)

@@ -137,7 +137,7 @@ public class VestPocketStore<TEntity> : IDisposable where TEntity : class, IEnti
 
         if (!options.ReadOnly)
         {
-            this.transactionQueue = new TransactionQueue<TEntity>(transactionStore, entityStore, options);
+            this.transactionQueue = new TransactionQueue<TEntity>(transactionStore, entityStore);
             await this.transactionQueue.Start();
         }
 
