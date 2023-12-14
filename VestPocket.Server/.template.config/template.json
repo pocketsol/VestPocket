@@ -1,0 +1,13 @@
+{
+  "$schema": "http://json.schemastore.org/template",
+  "author": "VestPocket",
+  "classifications": [ "Common", "webapi" ],
+  "identity": "VestPocket.Server",
+  "name": "VestPocket Server",
+  "shortName": "vpserver",
+  "sourceName":"VestPocket.Server",
+  "tags": {
+    "language": "C#",
+    "type": "project"
+  }
+}

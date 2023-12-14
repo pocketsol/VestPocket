@@ -1,0 +1,18 @@
+@VestPocket.Server_HostAddress = http://localhost:5268
+
+GET {{VestPocket.Server_HostAddress}}/store/foo
+Accept: application/json
+
+###
+
+GET {{VestPocket.Server_HostAddress}}/store/search/f
+Accept: application/json
+
+###
+
+POST {{VestPocket.Server_HostAddress}}/store/foo
+Content-Type: application/json
+
+{"$type":"Entity","Key":"foo","Version":1,"Deleted":false,"Body":"Just some body text"}
+
+###
