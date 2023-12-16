@@ -31,8 +31,6 @@ namespace VestPocket.ClientServer.Prelude.RestServer
         private readonly string _rootPassword;
         private readonly IDictionary<string, VestPocketStore<TStore>> _stores;
 
-        private bool _serverRunning = false;
-
         public RestServer(RestServerOptions options)
         {
             _stores = new Dictionary<string, VestPocketStore<TStore>>();
@@ -107,16 +105,7 @@ namespace VestPocket.ClientServer.Prelude.RestServer
                 return Results.NotFound("Store not found.");
             });
 
-            _serverRunning = true;
-
-            try
-            {
-                await _host.RunAsync();
-            }
-            catch
-            {
-                _serverRunning = false;
-            }
+            await _host.RunAsync();
         }
 
         public async Task StopAsync()
@@ -124,7 +113,7 @@ namespace VestPocket.ClientServer.Prelude.RestServer
             await _host.StopAsync();
         }
 
-        public string CreateStore(JsonTypeInfo<TStore> typeInfo, string name = "default", CancellationToken token = default)
+        public string CreateStore(JsonTypeInfo<TStore> typeInfo, string name = "default")
         {
             var options = new VestPocketOptions { FilePath = name + ".db" };
             var store = new VestPocketStore<TStore>(typeInfo, options);
