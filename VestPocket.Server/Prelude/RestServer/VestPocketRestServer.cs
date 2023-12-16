@@ -4,10 +4,13 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Hosting;
 using System;
+using System.Net.Mime;
 using System.Security;
+using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Text.Json.Serialization.Metadata;
 using VestPocket.Server.Interfaces;
+using static System.Runtime.InteropServices.JavaScript.JSType;
 
 namespace VestPocket.ClientServer.Prelude.RestServer
 {
@@ -45,21 +48,56 @@ namespace VestPocket.ClientServer.Prelude.RestServer
         {
             _host.Urls.Add(Hostname);
 
-            _host.MapGet("/get/{store}/{key}", (
+            _host.MapGet("/get/{store}/{key}", async (
                 [FromRoute] string store, 
                 [FromRoute] string key,
                 [FromHeader] string user,
-                [FromHeader] string password) =>
+                [FromHeader] string password) => 
             {
-                if (_stores.TryGetValue(key, out var value ))
+                if (_stores.TryGetValue(store, out var value))
                 {
+                    try
+                    {
+                        await value.OpenAsync(default);
+                        var result = value.Get(key);
+                        await value.Close(default);
 
+                        return Results.Ok(result);
+                    }
+                    catch(Exception ex)
+                    {
+                        return Results.Json(ex.Message, (JsonSerializerOptions?)null, "text/plain", 500);
+                    }
                 }
+
+                return Results.NotFound("Store not found.");
             });
 
-            _host.MapPut("/set/{store}/{key}", () =>
+            _host.MapPut("/set/{store}/{key}", async (
+                [FromRoute] string store,
+                [FromRoute] string key,
+                [FromBody] TStore data,
+                [FromHeader] string user,
+                [FromHeader] string password) =>
             {
+                if (_stores.TryGetValue(store, out var value))
+                {
+                    try
+                    {
+                        await value.OpenAsync(default);
+                        // store.Get()? Not sure on how to proceed
+                        // if yes, then the TStore should not be the direct type and yes an
+                        // implementation of IEntity? So I could use store.Save(TEntity)?
 
+                        return Results.Ok(null); // TODO: Change to reflect the operation result
+                    }
+                    catch (Exception ex)
+                    {
+                        return Results.Json(ex.Message, (JsonSerializerOptions?)null, "text/plain", 500);
+                    }
+                }
+
+                return Results.NotFound("Store not found.");
             });
 
             _serverRunning = true;
