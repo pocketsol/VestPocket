@@ -54,6 +54,11 @@ namespace VestPocket.ClientServer.Prelude.RestServer
                 [FromHeader] string user,
                 [FromHeader] string password) => 
             {
+                if (user != _rootUser || password != _rootPassword)
+                {
+                    return Results.Unauthorized();
+                }
+
                 if (_stores.TryGetValue(store, out var value))
                 {
                     try
@@ -80,12 +85,17 @@ namespace VestPocket.ClientServer.Prelude.RestServer
                 [FromHeader] string user,
                 [FromHeader] string password) =>
             {
+                if (user != _rootUser || password != _rootPassword)
+                {
+                    return Results.Unauthorized();
+                }
+
                 if (_stores.TryGetValue(store, out var value))
                 {
                     try
                     {
                         await value.OpenAsync(default);
-                        // store.Get()? Not sure on how to proceed
+                        // store.Set()? Not sure on how to proceed
                         // if yes, then the TStore should not be the direct type and yes an
                         // implementation of IEntity? So I could use store.Save(TEntity)?
 
