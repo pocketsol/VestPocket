@@ -80,8 +80,7 @@ namespace VestPocket.ClientServer.Prelude.RestServer
 
             _host.MapPut("/set/{store}/{key}", async (
                 [FromRoute] string store,
-                [FromRoute] string key,
-                [FromBody] TStore data,
+                [FromBody] TStore entity,
                 [FromHeader] string user,
                 [FromHeader] string password) =>
             {
@@ -95,11 +94,9 @@ namespace VestPocket.ClientServer.Prelude.RestServer
                     try
                     {
                         await value.OpenAsync(default);
-                        // store.Set()? Not sure on how to proceed
-                        // if yes, then the TStore should not be the direct type and yes an
-                        // implementation of IEntity? So I could use store.Save(TEntity)?
+                        var result = await value.Save(new[] { entity });
 
-                        return Results.Ok(null); // TODO: Change to reflect the operation result
+                        return Results.Ok(result.First());
                     }
                     catch (Exception ex)
                     {
