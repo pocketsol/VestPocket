@@ -1,18 +1,11 @@
 ﻿using Microsoft.AspNetCore.Builder;
-using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.Extensions.Hosting;
-using System;
-using System.Net.Mime;
-using System.Security;
 using System.Text.Json;
-using System.Text.Json.Serialization;
 using System.Text.Json.Serialization.Metadata;
 using VestPocket.Server.Interfaces;
-using static System.Runtime.InteropServices.JavaScript.JSType;
 
-namespace VestPocket.ClientServer.Prelude.RestServer
+namespace VestPocket.ClientServer.Core
 {
     public class RestServerOptions
     {
@@ -22,6 +15,13 @@ namespace VestPocket.ClientServer.Prelude.RestServer
         public string StoragePath { get; set; } = "/";
     }
 
+    public class RestServerConnectionPayload
+    {
+        public string? User { get; set; }
+        public string? Password { get; set; }
+        public DateTime Expiration { get; set; } = DateTime.Now.AddDays(7);
+    }
+
     public class RestServer<TStore> : IServer<TStore> where TStore : class, IEntity
     {
         public string Hostname { get; }
@@ -29,11 +29,13 @@ namespace VestPocket.ClientServer.Prelude.RestServer
         private readonly WebApplication _host;
         private readonly string _rootUser;
         private readonly string _rootPassword;
-        private readonly IDictionary<string, VestPocketStore<TStore>> _stores;
+        private readonly Dictionary<string, VestPocketStore<TStore>> _stores;
+        private readonly Dictionary<string, VestPocketConnection> _connections;
 
         public RestServer(RestServerOptions options)
         {
-            _stores = new Dictionary<string, VestPocketStore<TStore>>();
+            _stores = new();
+            _connections = new();
             Hostname = options.Hostname;
             _rootUser = options.RootUser;
             _rootPassword = options.RootPassword;
@@ -47,12 +49,11 @@ namespace VestPocket.ClientServer.Prelude.RestServer
             _host.Urls.Add(Hostname);
 
             _host.MapGet("/get/{store}/{key}", async (
-                [FromRoute] string store, 
+                [FromRoute] string store,
                 [FromRoute] string key,
-                [FromHeader] string user,
-                [FromHeader] string password) => 
+                [FromHeader] string token) =>
             {
-                if (user != _rootUser || password != _rootPassword)
+                if (!CheckConnection(token))
                 {
                     return Results.Unauthorized();
                 }
@@ -67,7 +68,7 @@ namespace VestPocket.ClientServer.Prelude.RestServer
 
                         return Results.Ok(result);
                     }
-                    catch(Exception ex)
+                    catch (Exception ex)
                     {
                         return Results.Json(ex.Message, (JsonSerializerOptions?)null, "text/plain", 500);
                     }
@@ -79,10 +80,9 @@ namespace VestPocket.ClientServer.Prelude.RestServer
             _host.MapPut("/set/{store}/{key}", async (
                 [FromRoute] string store,
                 [FromBody] TStore entity,
-                [FromHeader] string user,
-                [FromHeader] string password) =>
+                [FromHeader] string token) =>
             {
-                if (user != _rootUser || password != _rootPassword)
+                if (!CheckConnection(token))
                 {
                     return Results.Unauthorized();
                 }
@@ -105,6 +105,19 @@ namespace VestPocket.ClientServer.Prelude.RestServer
                 return Results.NotFound("Store not found.");
             });
 
+            _host.MapPost("/connect", async ([FromBody] RestServerConnectionPayload payload) =>
+            {
+                var areCredentialsCorrect = payload.User == _rootUser && payload.Password == _rootPassword;
+
+                if (areCredentialsCorrect)
+                {
+                    var token = CreateConnection(payload.Expiration);
+                    return Results.Ok(token);
+                }
+
+                return Results.Unauthorized();
+            });
+
             await _host.RunAsync();
         }
 
@@ -119,6 +132,29 @@ namespace VestPocket.ClientServer.Prelude.RestServer
             var store = new VestPocketStore<TStore>(typeInfo, options);
             _stores.Add(name, store);
             return name;
+        }
+
+        private string CreateConnection(DateTime expiration)
+        {
+            var token = Guid.NewGuid().ToString().Replace("-", "");
+            _connections.Add(token, new VestPocketConnection(_rootUser, expiration));
+            return token;
+        }
+
+        private bool CheckConnection(string token)
+        {
+            if (_connections.TryGetValue(token, out var connection))
+            {
+                if (connection.ExpiresAt < DateTime.Now)
+                {
+                    _connections.Remove(token);
+                    return false;
+                }
+
+                return true;
+            }
+
+            return false;
         }
     }
 }
