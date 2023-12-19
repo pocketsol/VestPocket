@@ -20,6 +20,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\VestPocket.Server\VestPocket.ClientServer.csproj" />
     <ProjectReference Include="..\VestPocket\VestPocket.csproj" />
   </ItemGroup>
 
