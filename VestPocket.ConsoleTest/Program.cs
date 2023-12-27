@@ -21,7 +21,7 @@ class Program
         Console.WriteLine("---------Running VestPocket---------");
 
         var options = new VestPocketOptions();
-        options.FilePath = null;
+        //options.FilePath = null;
         options.RewriteRatio = 1;
 
         RemoveDatabaseFile(options);

@@ -40,14 +40,6 @@ public interface IEntity
     public string Key { get; }
 
     /// <summary>
-    /// The version of the entity. To store a new entity, set its version to 0 and you will
-    /// get back an entity with version 1 after it is saved. Because it is presumed that 
-    /// VestPocket will be used with C# Record types, a new instance is created for every 
-    /// version that is stored.
-    /// </summary>
-    public int Version { get; }
-
-    /// <summary>
     /// If the entity should be deleted in VestPocket.
     /// </summary>
     /// <example>
@@ -59,24 +51,5 @@ public interface IEntity
     ///</code>
     /// </example>
     public bool Deleted { get; }
-
-    /// <summary>
-    /// Generates a clone of the existing entity, but with a new Version.
-    /// It is assumped that the IEntity type is a C# Record type which will implement
-    /// this method by utilizing the record type 'with' syntax, but if a non record type
-    /// is used, cloning the entity and assigning the new version number in this method is
-    /// also appropriate.
-    /// </summary>
-    /// <example>
-    /// <code>
-    /// public IEntity WithVersion(int version)
-    /// {
-    ///     return this with { Version = version };
-    /// }
-    /// </code>
-    /// </example>
-    /// <param name="version">The new version for the entity</param>
-    /// <returns></returns>
-    public IEntity WithVersion(int version);
 
 }

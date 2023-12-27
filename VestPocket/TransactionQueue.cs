@@ -69,7 +69,7 @@ internal class TransactionQueue<TBaseType> where TBaseType : class, IEntity
                 sw.Restart();
                 do
                 {
-                    if (transaction.NoOp)
+                    if (transaction.Count == 0)
                     {
                         transaction.Complete();
                         continue;

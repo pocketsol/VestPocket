@@ -30,7 +30,7 @@ namespace VestPocket.Benchmark
         {
             for (int i = 0; i < N; i++)
             {
-                this.dictionary.TryAdd(i.ToString(), new Entity(i.ToString(), 0, false, $"Test Body {i}"));
+                this.dictionary.TryAdd(i.ToString(), new Entity(i.ToString(), false, $"Test Body {i}"));
             }
             testDocument = this.dictionary[testKey];
         }
@@ -44,7 +44,7 @@ namespace VestPocket.Benchmark
         [Benchmark]
         public Task SetKey()
         {
-            var newEntity = testDocument with { Version = testDocument.Version + 1 };
+            var newEntity = testDocument with { };
             dictionary.TryAdd(testKey, newEntity);
             return Task.CompletedTask;
         }

@@ -30,21 +30,17 @@ public class VestPocketStoreTests : IClassFixture<VestPocketStoreFixture>
         var key = "crud";
         var entity = new TestDocument (key, 0, false, "crud body");
         var entitySaved = await testStore.Save(entity);
-        var entitySavedExpected = entity with {Version = 1};
-        
-        Assert.Equal(entitySavedExpected, entitySaved);
 
         var entityRetreived = testStore.Get<TestDocument>(key);
-        Assert.Equal(entitySavedExpected, entityRetreived);
+        Assert.Equal(entitySaved, entityRetreived);
 
-        var entityToUpdate = entityRetreived with {Body = "crud body updated"}; 
-        var expectedUpdatedEntity = entityToUpdate with {Version = 2};
-        var entityUpdated = await testStore.Save(entityToUpdate);
+        var entityToUpdate = entityRetreived with {Body = "crud body updated"};
+        var entityUpdated = await testStore.Swap(entityToUpdate, entityRetreived);
 
-        Assert.Equal(expectedUpdatedEntity, entityUpdated);
+        Assert.Equal(entityToUpdate, entityUpdated);
 
         var toDelete = entityUpdated with { Deleted = true };
-        await testStore.Save(toDelete);
+        await testStore.Update(toDelete, entityUpdated);
         var deletedDocument = testStore.Get<TestDocument>(key);
         Assert.Null(deletedDocument);
     }
@@ -121,33 +117,24 @@ public class VestPocketStoreTests : IClassFixture<VestPocketStoreFixture>
     }
 
     [Fact]
-    public async Task Save_FailsWithOldVersionDocument()
+    public async Task Swap_DoesNotSwapBasedOnOldDocument()
     {
         var key = "crud";
-        var version1 = await testStore.Save(new TestDocument(key, 0, false, "doc1"));
-        var version0 = version1 with { Version = 0 };
-        await Assert.ThrowsAsync<ConcurrencyException>(async () => await testStore.Save(version0));
+        var oldDocument = await testStore.Save(new TestDocument(key, 0, false, "version1"));
+        var expectedDocument = await testStore.Save(oldDocument with { Body = "version2" });
+        var newDoc = oldDocument with { Body = "version2" };
+        var finalStoreDocument = await testStore.Swap(newDoc, oldDocument);
+        Assert.Equal(expectedDocument, finalStoreDocument);
     }
 
-    [Fact]
-    public async Task TrySave_ReturnsFalseOnOldVersionDocument()
-    {
-        var key = "crud";
-        var version1 = await testStore.Save(new TestDocument(key, 0, false, "doc1"));
-        var version0 = version1 with { Version = 0 };
-        var expected = false;
-        var actual = await testStore.TrySave(version0);
-        Assert.Equal(expected, actual);
-    }
-
-    [Fact]
-    public async Task Delete_FailsWithOldVersionDocument()
-    {
-        var key = "crud";
-        var version1 = await testStore.Save(new TestDocument(key, 0, false, "doc1"));
-        var version0 = version1 with { Deleted = true, Version = 0 };
-        await Assert.ThrowsAsync<ConcurrencyException>(async () => await testStore.Save(version0));
-    }
+    //[Fact]
+    //public async Task Delete_FailsWithOldVersionDocument()
+    //{
+    //    var key = "crud";
+    //    var version1 = await testStore.Save(new TestDocument(key, 0, false, "doc1"));
+    //    var version0 = version1 with { Deleted = true, Version = 0 };
+    //    await Assert.ThrowsAsync<ConcurrencyException>(async () => await testStore.Save(version0));
+    //}
 
     [Fact]
     public async Task Save_CanProcessMultipleEntitiesAsTransaction()
@@ -173,43 +160,43 @@ public class VestPocketStoreTests : IClassFixture<VestPocketStoreFixture>
     /// older version number. Expected result is a failure
     /// </summary>
     /// <returns></returns>
-    [Fact]
-    public async Task Save_MultipleChangesRejectedOnAnyOldVersionDocument()
-    {
+    //[Fact]
+    //public async Task Save_MultipleChangesRejectedOnAnyOldVersionDocument()
+    //{
 
-        var testDoc = await testStore.Save(new TestDocument("1", 0, false, "body1"));
+    //    var testDoc = await testStore.Save(new TestDocument("1", 0, false, "body1"));
         
-        var docWithOldVersion = testDoc with { Version= 0 }; 
+    //    var docWithOldVersion = testDoc with { Version= 0 }; 
 
-        Entity[] changes = new Entity[]
-        {
-            docWithOldVersion,
-            new TestDocument("2", 0, false, "body2"),
-            new Entity("3", 0, false)
-        };
+    //    Entity[] changes = new Entity[]
+    //    {
+    //        docWithOldVersion,
+    //        new TestDocument("2", 0, false, "body2"),
+    //        new Entity("3", 0, false)
+    //    };
 
-        await Assert.ThrowsAsync<ConcurrencyException>(async() => await testStore.Save(changes));
-    }
+    //    await Assert.ThrowsAsync<ConcurrencyException>(async() => await testStore.Save(changes));
+    //}
 
-    [Fact]
-    public async Task TrySave_MultipleChangesRejectedOnAnyOldVersionDocument()
-    {
+    //[Fact]
+    //public async Task TrySave_MultipleChangesRejectedOnAnyOldVersionDocument()
+    //{
 
-        var testDoc = await testStore.Save(new TestDocument("1", 0, false, "body1"));
+    //    var testDoc = await testStore.Save(new TestDocument("1", 0, false, "body1"));
 
-        var docWithOldVersion = testDoc with { Version = 0 };
+    //    var docWithOldVersion = testDoc with { Version = 0 };
 
-        Entity[] changes = new Entity[]
-        {
-            docWithOldVersion,
-            new TestDocument("2", 0, false, "body2"),
-            new Entity("3", 0, false)
-        };
-        var expectedTrySave = false;
-        var actualTrySave = await testStore.TrySave(changes);
+    //    Entity[] changes = new Entity[]
+    //    {
+    //        docWithOldVersion,
+    //        new TestDocument("2", 0, false, "body2"),
+    //        new Entity("3", 0, false)
+    //    };
+    //    var expectedTrySave = false;
+    //    var actualTrySave = await testStore.TrySave(changes);
 
-        Assert.Equal(expectedTrySave, actualTrySave);
-    }
+    //    Assert.Equal(expectedTrySave, actualTrySave);
+    //}
 
     [Fact]
     public async Task Save_FailsWhenReadOnly()

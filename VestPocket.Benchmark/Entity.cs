@@ -7,12 +7,8 @@ using System.Threading.Tasks;
 
 namespace VestPocket.Benchmark
 {
-    public record class Entity(string Key, int Version, bool Deleted, string Body) : IEntity
+    public record class Entity(string Key, bool Deleted, string Body) : IEntity
     {
-        public IEntity WithVersion(int version)
-        {
-            return this with { Version = version };
-        }
     }
 
     [JsonSourceGenerationOptions(WriteIndented = false)]

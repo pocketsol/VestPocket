@@ -39,7 +39,7 @@ public class VestPocketBenchmarks
         Task[] setResults = new Task[N];
         for (int i = 0; i < N; i++)
         {
-            setResults[i] = store.Save(new Entity(i.ToString(), 0, false, $"Test Body {i}"));
+            setResults[i] = store.Save(new Entity(i.ToString(), false, $"Test Body {i}"));
         }
         Task.WaitAll(setResults);
         testDocument = store.Get<Entity>(testKey);

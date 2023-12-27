@@ -80,33 +80,21 @@ internal class EntityStore<T> : IDisposable where T : class, IEntity
     /// Applies a transaction, with one or more changes, to the entity store and sets any concurrency errors encountered.
     /// </summary>
     /// <param name="transaction">The transaction to apply to the Entity Store</param>
-    /// <returns>Returns true if the transaction was applied without encountering a <see cref="ConcurrencyException"/>, false if one was set on the result of the transaction.</returns>
+    /// <returns>Returns true if the transaction was applied or false if a concurrency issue was encountered.</returns>
     public bool ProcessTransaction(Transaction<T> transaction)
     {
         if (readOnly) throw new InvalidOperationException("The store is marked readonly and cannot accept transactions");
-        if (transaction.IsSingleChange)
+        if (transaction.Count == 0) return true; // NoOp
+
+        if (transaction.Count == 1)
         {
-            var entity = transaction.Entity;
+            var entity = transaction[0];
 
             var existingDocument = Lookup[entity.Key];
             if (existingDocument != null)
             {
-
-                if (
-                    (existingDocument.Version > entity.Version) ||
-                    (existingDocument.Deleted && entity.Version != 0)
-                    )
+                if (!transaction.Validate(existingDocument))
                 {
-                    transaction.Entity = existingDocument;
-                    if (transaction.ThrowOnError)
-                    {
-                        transaction.SetError(new ConcurrencyException(entity.Key, entity.Version, existingDocument.Version));
-                    }
-                    else
-                    {
-                        transaction.FailedConcurrency = true;
-                        transaction.Complete();
-                    }
                     return false;
                 }
                 deadEntityCount++;
@@ -116,42 +104,21 @@ internal class EntityStore<T> : IDisposable where T : class, IEntity
                 entityCount++;
             }
 
-            entity = (T)entity.WithVersion(entity.Version + 1);
             Lookup[entity.Key] = entity;
-            //Lookup.Set(entity.Key, entity);
 
-            transaction.Entity = entity;
         }
         else
         {
             int deadEntitiesInExisting = 0;
             int newEntitiesCount = 0;
-            bool failedTrySave = false;
-            for (int i = 0; i < transaction.Entities.Length; i++)
+            //bool failedTrySave = false;
+            for (int i = 0; i < transaction.Count; i++)
             {
-                var entity = transaction.Entities[i];
+                var entity = transaction[i];
                 var existingDocument = Lookup[entity.Key];
 
                 if (existingDocument != null)
                 {
-                    if (
-                        (existingDocument.Version > entity.Version) ||
-                        (existingDocument.Deleted && entity.Version != 0)
-                        )
-                    {
-                        transaction.Entities[i] = existingDocument;
-                        if (transaction.ThrowOnError)
-                        {
-                            transaction.SetError(new ConcurrencyException(entity.Key, entity.Version, existingDocument.Version));
-                            return false;
-                        }
-                        else
-                        {
-                            failedTrySave = true;
-                            continue;
-                        }
-
-                    }
                     deadEntitiesInExisting++;
                 }
                 else
@@ -159,21 +126,21 @@ internal class EntityStore<T> : IDisposable where T : class, IEntity
                     newEntitiesCount++;
                 }
             }
-            if (failedTrySave )
-            {
-                transaction.FailedConcurrency = true;
-                transaction.Complete();
-                return false;
-            }
+            //if (failedTrySave )
+            //{
+            //    transaction.FailedConcurrency = true;
+            //    transaction.Complete();
+            //    return false;
+            //}
             this.deadEntityCount += deadEntitiesInExisting;
             this.entityCount += newEntitiesCount;
 
-            for (int i = 0; i < transaction.Entities.Length; i++)
+            for (int i = 0; i < transaction.Count; i++)
             {
-                var change = transaction.Entities[i];
-                change = (T)change.WithVersion(change.Version + 1);
+                var change = transaction[i];
+                //change = (T)change.WithVersion(change.Version + 1);
                 Lookup[change.Key] = change;
-                transaction.Entities[i] = change;
+                //transaction[i] = change;
             }
         }
 
@@ -193,17 +160,13 @@ internal class EntityStore<T> : IDisposable where T : class, IEntity
         var existingRecord = Lookup[entity.Key];
         if (existingRecord != null)
         {
-            if (entity.Version > existingRecord.Version)
-            {
-                Lookup[entity.Key] = entity;
-            }
             deadEntityCount++;
         }
         else
         {
             entityCount++;
-            Lookup[entity.Key] = entity;
         }
+        Lookup[entity.Key] = entity;
     }
 
 

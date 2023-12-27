@@ -1,4 +1,7 @@
-﻿namespace VestPocket;
+﻿using System.Buffers;
+using TrieHard.PrefixLookup;
+
+namespace VestPocket;
 
 /// <summary>
 /// Represents an action to save one or more entities to the <seealso cref="EntityStore{T}"/>.
@@ -8,41 +11,23 @@
 /// the VestPocket.
 /// </summary>
 /// <typeparam name="T"></typeparam>
-internal class Transaction<T> where T : IEntity
+internal abstract class Transaction<T> where T : IEntity
 {
     private TaskCompletionSource taskCompletionSource = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-    private T entity;
-    private T[] entities;
     public bool FailedConcurrency { get; set; }
-
-    private bool noOp;
-    public bool NoOp => noOp;
-
-    public T Entity { get => entity; internal set => entity = value; }
-    public T[] Entities { get => entities; internal set => entities = value; }
+    public abstract int Count { get; }
+    public abstract T this[int index] { get; set; }
     public bool ThrowOnError { get; }
 
-    public ReadOnlyMemory<byte> payload;
+    public ArraySegment<byte> Payload;
     public bool IsComplete => taskCompletionSource.Task.IsCompleted;
 
-    public Transaction(T entity, bool throwOnError)
+    public Transaction(bool throwOnError)
     {
-        Entity = entity;
         ThrowOnError = throwOnError;
     }
 
-    public Transaction(T[] entities, bool throwOnError)
-    {
-        Entities = entities;
-        ThrowOnError = throwOnError;
-    }
-
-    public Transaction()
-    {
-        this.noOp = true;
-    }
-
-    public bool IsSingleChange => this.Entity != null;
+    public virtual bool Validate(T existingEntity) => true;
 
     public void Complete()
     {
@@ -55,5 +40,13 @@ internal class Transaction<T> where T : IEntity
     }
 
     public Task Task => taskCompletionSource.Task;
+
+    public void ClearPayload()
+    {
+        if (Payload.Array is not null)
+        {
+            ArrayPool<byte>.Shared.Return(Payload.Array);
+        }
+    }
 
 }

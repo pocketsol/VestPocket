@@ -2,8 +2,10 @@
 using System.IO;
 using System.Text.Json;
 using System.Text.Json.Serialization.Metadata;
+using System.Transactions;
 using DotNext.Buffers;
 using TrieHard.PrefixLookup;
+using static DotNext.Threading.Tasks.DynamicTaskAwaitable;
 
 namespace VestPocket;
 
@@ -178,19 +180,19 @@ public class VestPocketStore<TEntity> : IDisposable where TEntity : class, IEnti
     /// <exception>ConcurrencyException</exception>
     public async Task<TEntity[]> Save(TEntity[] entities)
     {
+        var transaction = await Save(entities, true);
+        return transaction.Entities;
+    }
+
+    private async Task<MultipleTransaction<TEntity>> Save(TEntity[] entities, bool throwOnException)
+    {
         EnsureWriteAccess();
-        var transaction = new Transaction<TEntity>(entities, true);
-        using var buffer = new PooledArrayBufferWriter<byte>();
-        using var writer = new Utf8JsonWriter(buffer, jsonWriterOptions);
-        foreach(var entity in entities)
-        {
-            JsonSerializer.Serialize(writer, entity, jsonTypeInfo);
-            buffer.Write(LF_Byte);
-        }
-        transaction.payload = buffer.WrittenMemory;
+        var transaction = new MultipleTransaction<TEntity>(entities, throwOnException);
+        transaction.Payload = SerializeValues(entities);
         transactionQueue.Enqueue(transaction);
         await transaction.Task;
-        return transaction.Entities;
+        transaction.ClearPayload();
+        return transaction;
     }
 
     /// <summary>
@@ -204,18 +206,125 @@ public class VestPocketStore<TEntity> : IDisposable where TEntity : class, IEnti
     public async Task<bool> TrySave<T>(T[] entities) where T : class, TEntity
     {
         EnsureWriteAccess();
-        var transaction = new Transaction<TEntity>(entities, false);
-        using var buffer = new PooledArrayBufferWriter<byte>();
-        var writer = new Utf8JsonWriter(buffer, jsonWriterOptions);
-        foreach (var entity in entities)
-        {
-            JsonSerializer.Serialize(writer, entity, jsonTypeInfo);
-            buffer.Write(LF_Byte);
-        }
-        transaction.payload = buffer.WrittenMemory;
+        var transaction = new MultipleTransaction<TEntity>(entities, false);
+        transaction.Payload = SerializeValues(entities);
         transactionQueue.Enqueue(transaction);
         await transaction.Task;
+        transaction.ClearPayload();
         return !transaction.FailedConcurrency;
+    }
+
+    //public async Task Delete<T>(T entity) where T : class, TEntity
+    //{
+    //    await Update(null, entity);
+    //}
+
+    /// <summary>
+    /// Saves an entity to the store, but only if the entity in the store
+    /// still matches the entity that this change was based off of. Throws a ConcurrencyException
+    /// if the entity currently stored does not match the basedOn parameter.
+    /// </summary>
+    /// <typeparam name="T">The type of entity to save</typeparam>
+    /// <param name="entity">The entity to save</param>
+    /// <param name="basedOn">The entity that is expected to currently to be in the store that
+    /// the changes to the 'entity' parameter were applied to. Pass as null if no stored value is expected.</param>
+    public async Task Update<T>(T entity, T basedOn) where T : class, TEntity
+    {
+        var transaction = new UpdateTransaction<TEntity>(entity, basedOn, true);
+        EnsureWriteAccess();
+        try
+        {
+            transaction.Payload = SerializeValue(entity);
+            transactionQueue.Enqueue(transaction);
+            await transaction.Task.ConfigureAwait(false);
+        }
+        finally
+        {
+            transaction.ClearPayload();
+        }
+
+    }
+
+    /// <summary>
+    /// Saves an entity to the store, but only if the entity in the store
+    /// still matches the entity that this change was based on. This is similar to 
+    /// a compare and swap operation.
+    /// </summary>
+    /// <typeparam name="T">The type of entity to save</typeparam>
+    /// <param name="entity">The entity to save</param>
+    /// <param name="basedOn">The entity that is expected to currently to be in the store that
+    /// the changes to the 'entity' parameter were applied to. Pass as null if no stored value is expected.</param>
+    /// <returns>The entity stored for the key after the operation</returns>
+    public async Task<T> Swap<T>(T entity, T basedOn) where T : class, TEntity
+    {
+        EnsureWriteAccess();
+        var transaction = new UpdateTransaction<TEntity>(entity, basedOn, false);
+        transaction.Payload = SerializeValue(entity);
+        transactionQueue.Enqueue(transaction);
+        await transaction.Task.ConfigureAwait(false);
+        transaction.ClearPayload();
+        return (T)transaction.Entity;
+    }
+
+    ThreadLocal<ArrayBufferWriter<byte>> localBuffer = new ThreadLocal<ArrayBufferWriter<byte>>(() => new ArrayBufferWriter<byte>());
+    ThreadLocal<Utf8JsonWriter> localJsonWriter = new ThreadLocal<Utf8JsonWriter>();
+    //ThreadLocal<ArrayBufferWriter<byte>> localPayloadBuffer = new ThreadLocal<ArrayBufferWriter<byte>>(() => new ArrayBufferWriter<byte>());
+    private ArraySegment<byte> SerializeValue<T>(T entity)
+    {
+        var buffer = localBuffer.Value;
+        buffer.ResetWrittenCount();
+        //var payloadBuffer = localPayloadBuffer.Value;
+        //payloadBuffer.ResetWrittenCount();
+
+        if (!localJsonWriter.IsValueCreated)
+        {
+            localJsonWriter.Value = new Utf8JsonWriter(buffer, jsonWriterOptions);
+        }
+        else
+        {
+            localJsonWriter.Value.Reset();
+        }
+        var jsonWriter = localJsonWriter.Value;
+
+        //jsonWriter.WriteStartObject();
+        //jsonWriter.WriteString("key"u8);
+        //jsonWriter.WritePropertyName("val"u8);
+        JsonSerializer.Serialize(jsonWriter, entity, jsonTypeInfo);
+        //jsonWriter.WriteEndObject();
+        //buffer.Write("}\n"u8);
+        buffer.Write(LF_Byte);
+        var pooledArray = ArrayPool<byte>.Shared.Rent(buffer.WrittenCount);
+        buffer.WrittenMemory.Span.CopyTo(pooledArray);
+        return new ArraySegment<byte>(pooledArray, 0, buffer.WrittenCount);
+    }
+
+    private ArraySegment<byte> SerializeValues<T>(T[] entities)
+    {
+        var buffer = localBuffer.Value;
+        buffer.ResetWrittenCount();
+        if (!localJsonWriter.IsValueCreated)
+        {
+            localJsonWriter.Value = new Utf8JsonWriter(buffer, jsonWriterOptions);
+        }
+        else
+        {
+            localJsonWriter.Value.Reset();
+        }
+        var jsonWriter = localJsonWriter.Value;
+
+        foreach(var entity in entities)
+        {
+            JsonSerializer.Serialize(jsonWriter, entity, jsonTypeInfo);
+            buffer.Write(LF_Byte);
+        }
+        //jsonWriter.WriteStartObject();
+        //jsonWriter.WriteString("key"u8, key);
+        //jsonWriter.WritePropertyName("val"u8);
+        //jsonWriter.WriteEndObject();
+        //buffer.Write("}\n"u8);
+        var pooledArray = ArrayPool<byte>.Shared.Rent(buffer.WrittenCount);
+        buffer.WrittenMemory.Span.CopyTo(pooledArray);
+        return new ArraySegment<byte>(pooledArray, 0, buffer.WrittenCount);
     }
 
     /// <summary>
@@ -229,14 +338,11 @@ public class VestPocketStore<TEntity> : IDisposable where TEntity : class, IEnti
     public async Task<T> Save<T>(T entity) where T : class, TEntity
     {
         EnsureWriteAccess();
-        var transaction = new Transaction<TEntity>(entity, true);
-        using var buffer = new PooledArrayBufferWriter<byte>();
-        using var writer = new Utf8JsonWriter(buffer, jsonWriterOptions);
-        JsonSerializer.Serialize(writer, entity, jsonTypeInfo);
-        buffer.Write(LF_Byte);
-        transaction.payload = buffer.WrittenMemory;
+        var transaction = new SingleTransaction<TEntity>(entity, true);
+        transaction.Payload = SerializeValue(entity);
         transactionQueue.Enqueue(transaction);
         await transaction.Task.ConfigureAwait(false);
+        transaction.ClearPayload();
         return (T)transaction.Entity;
     }
 
@@ -250,14 +356,11 @@ public class VestPocketStore<TEntity> : IDisposable where TEntity : class, IEnti
     public async Task<bool> TrySave<T>(T entity) where  T : class, TEntity
     {
         EnsureWriteAccess();
-        var transaction = new Transaction<TEntity>(entity, false);
-        using var buffer = new PooledArrayBufferWriter<byte>();
-        var writer = new Utf8JsonWriter(buffer, jsonWriterOptions);
-        JsonSerializer.Serialize(writer, entity, jsonTypeInfo);
-        buffer.Write(LF_Byte);
-        transaction.payload = buffer.WrittenMemory;
+        var transaction = new SingleTransaction<TEntity>(entity, false);
+        transaction.Payload = SerializeValue(entity);
         transactionQueue.Enqueue(transaction);
         await transaction.Task.ConfigureAwait(false);
+        transaction.ClearPayload();
         return !transaction.FailedConcurrency;
     }
 
@@ -431,7 +534,7 @@ public class VestPocketStore<TEntity> : IDisposable where TEntity : class, IEnti
 
     internal async Task QueueNoOpTransaction()
     {
-        var transaction = new Transaction<TEntity>();
+        var transaction = new NoOpTransaction<TEntity>();
         transactionQueue.Enqueue(transaction);
         await transaction.Task;
     }

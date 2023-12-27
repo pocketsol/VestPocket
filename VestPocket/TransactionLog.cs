@@ -333,7 +333,7 @@ internal class TransactionLog<T> : IDisposable where T : class, IEntity
 
     public long WriteTransaction(Transaction<T> transaction)
     {
-        long bytesWritten = WriteDocumentPayload(transaction.payload);
+        long bytesWritten = WriteDocumentPayload(transaction.Payload);
         transaction.Complete();
         if (options.Durability == VestPocketDurability.FlushEachTransaction)
         {
@@ -345,11 +345,10 @@ internal class TransactionLog<T> : IDisposable where T : class, IEntity
     private readonly byte[] LF = new byte[] { 10 };
     private const byte LF_Byte = 10;
 
-    public long WriteDocumentPayload(in ReadOnlyMemory<byte> payload)
+    public long WriteDocumentPayload(ReadOnlySpan<byte> payload)
     {
         long startingPosition;
         long endingPosition;
-        var payloadSpan = payload.Span;
 
         startingPosition = outputStream.Position;
 
@@ -359,7 +358,7 @@ internal class TransactionLog<T> : IDisposable where T : class, IEntity
             JsonSerializer.Serialize(outputStream, this.header, InternalSerializationContext.Default.StoreHeader);
             outputStream.Write(LF, 0, 1);
         }
-        outputStream.Write(payloadSpan);
+        outputStream.Write(payload);
 
         var written = outputStream.Position - startingPosition;
         unflushed += (int)written;
@@ -368,7 +367,7 @@ internal class TransactionLog<T> : IDisposable where T : class, IEntity
         {
             if (rewriteTailBuffer != null)
             {
-                outputStream.Write(payloadSpan);
+                outputStream.Write(payload);
             }
         }
 
