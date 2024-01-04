@@ -2,6 +2,6 @@
 {
     public interface IVestPocketClient
     {
-        public IOpenStore<TEntity> Open<TEntity>(string store);
+        public IRemoteVestPocketStore<TEntity> Open<TEntity>(string store, CancellationToken ct = default);
     }
 }

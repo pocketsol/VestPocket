@@ -77,6 +77,13 @@ namespace VestPocket.ClientServer.Base
 
             _initialized = true;
         }
+        
+        /// <summary>
+        /// Entirely clear the server data in the file system. Warning: potentially
+        /// destructive action. This method should not be called in production
+        /// environments and in a future version will be disabled by default below
+        /// a explicit configuration.
+        /// </summary>
         public void ForceClear()
         {
             var di = new DirectoryInfo(_storagePath!);

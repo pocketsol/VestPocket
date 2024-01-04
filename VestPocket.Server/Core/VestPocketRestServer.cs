@@ -1,4 +1,5 @@
 ﻿using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.DataProtection.KeyManagement;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using System.Text.Json;
@@ -104,6 +105,35 @@ public class VestPocketRestServer : VestPocketServer
                 {
                     await value.OpenAsync(default);
                     var result = value.Get(key);
+                    await value.Close(default);
+
+                    return Results.Ok(result);
+                }
+                catch (Exception ex)
+                {
+                    return Results.Json(ex.Message, (JsonSerializerOptions?)null, "text/plain", 500);
+                }
+            }
+
+            return Results.NotFound("Store not found.");
+        });
+
+        _host.MapGet("/get-by-prefix/{store}/{prefix}", async (
+            [FromRoute] string store,
+            [FromRoute] string prefix,
+            [FromHeader] string token) =>
+        {
+            if (!CheckConnection(token))
+            {
+                return Results.Unauthorized();
+            }
+
+            if (_stores!.TryGetValue(store, out var value))
+            {
+                try
+                {
+                    await value.OpenAsync(default);
+                    var result = value.GetByPrefix(prefix);
                     await value.Close(default);
 
                     return Results.Ok(result);
