@@ -2,10 +2,7 @@
 using VestPocket.ClientServer.Core;
 using System.Net.Http;
 using System.Net;
-using VestPocket.Server.Interfaces;
 using System.Text.Json;
-using DotNext.Collections.Generic;
-using System.Collections.Generic;
 using System.Net.Http.Headers;
 
 namespace VestPocket.Test
