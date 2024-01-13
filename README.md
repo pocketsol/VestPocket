@@ -18,7 +18,7 @@ Vest Pocket is a single-file persisted lookup contained in a pure .NET 7.0+ libr
 
 # Setup
 
-After installing the nuget package, some code needs to be added to the project before Vest Pocket can be used.
+After installing the nuget package, some code needs to be added to the project before Vest Pocket can be used. They can be added in any file, it is recommended to have a session in your application just for that.
 
 ```csharp
     [JsonDerivedType(typeof(Entity), nameof(Entity))]
