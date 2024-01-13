@@ -2,7 +2,9 @@
 using Microsoft.AspNetCore.DataProtection.KeyManagement;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using System.ComponentModel.DataAnnotations;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using VestPocket.ClientServer.Base;
 
 namespace VestPocket.ClientServer.Core;
@@ -11,6 +13,22 @@ public class VestPocketRestOptions : VestPocketServerOptions
 {
     public string Prefix { get; set; } = "http://";
     public string Hostname { get; set; } = "localhost:9597";
+}
+
+public class VestPocketItemPayload
+{
+    [Required]
+    [JsonPropertyName("key")]
+    public string? Key { get; set; }
+    [Required]
+    [JsonPropertyName("version")]
+    public int Version { get; set; }
+    [Required]
+    [JsonPropertyName("deleted")]
+    public bool Deleted { get; set; }
+    [Required]
+    [JsonPropertyName("item")]
+    public object? Item { get; set; }
 }
 
 public class RestServerConnectionPayload
@@ -147,9 +165,9 @@ public class VestPocketRestServer : VestPocketServer
             return Results.NotFound("Store not found.");
         });
 
-        _host.MapPut("/set/{store}/{key}", async (
+        _host.MapPut("/set/{store}", async (
             [FromRoute] string store,
-            [FromBody] VestPocketItem entity,
+            [FromBody] VestPocketItemPayload entity,
             [FromHeader] string token) =>
         {
             if (!CheckConnection(token))
@@ -162,9 +180,24 @@ public class VestPocketRestServer : VestPocketServer
                 try
                 {
                     await value.OpenAsync(default);
-                    var result = await value.Save(new[] { entity });
+                    var vestPocketItem = new VestPocketItem(
+                        entity.Key!,
+                        entity.Version!, 
+                        entity.Deleted!, 
+                        entity.Item!);
 
-                    return Results.Ok(result.First());
+                    var result = await value.Save(new[] { vestPocketItem });
+                    var resultFirst = result.First();
+
+                    var responseObject = new
+                    {
+                        resultFirst.Key,
+                        resultFirst.Item,
+                        resultFirst.Version,
+                        resultFirst.Deleted
+                    };
+
+                    return Results.Ok(responseObject);
                 }
                 catch (Exception ex)
                 {
@@ -185,7 +218,7 @@ public class VestPocketRestServer : VestPocketServer
                 return Results.Ok(token);
             }
 
-            return Results.Unauthorized();
+            return Results.Json(statusCode: 401, data: "Incorrect credentials");
         });
     }
 }
