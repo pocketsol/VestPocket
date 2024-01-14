@@ -29,7 +29,7 @@ public class VestPocketBenchmarks
         }
 
         var options = new VestPocketOptions();
-        options.FilePath = dbFile;
+        options.FilePath = null;
         options.RewriteRatio = 1;
         options.Durability = VestPocketDurability.FileSystemCache;
         

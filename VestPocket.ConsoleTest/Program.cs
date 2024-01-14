@@ -23,6 +23,7 @@ class Program
         var options = new VestPocketOptions();
         //options.FilePath = null;
         options.RewriteRatio = 1;
+        options.Durability = VestPocketDurability.FileSystemCache;
 
         RemoveDatabaseFile(options);
         connection = new VestPocketStore<Entity>(SourceGenerationContext.Default.Entity, options);

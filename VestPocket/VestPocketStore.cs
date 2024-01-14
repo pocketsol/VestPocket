@@ -1,11 +1,9 @@
-﻿using System.Buffers;
+﻿using System;
+using System.Buffers;
 using System.IO;
 using System.Text.Json;
 using System.Text.Json.Serialization.Metadata;
-using System.Transactions;
-using DotNext.Buffers;
 using TrieHard.PrefixLookup;
-using static DotNext.Threading.Tasks.DynamicTaskAwaitable;
 
 namespace VestPocket;
 
@@ -18,14 +16,16 @@ public class VestPocketStore<TEntity> : IDisposable where TEntity : class, IEnti
 {
     private readonly VestPocketOptions options;
     private readonly JsonTypeInfo<TEntity> jsonTypeInfo;
-    private readonly JsonWriterOptions jsonWriterOptions;
-    private const byte LF_Byte = 10;
+    //private readonly JsonWriterOptions jsonWriterOptions;
+    //private const byte LF_Byte = 10;
 
     private TransactionQueue<TEntity> transactionQueue;
     private TransactionLog<TEntity> transactionStore;
     private EntityStore<TEntity> entityStore;
     private string directory;
     private bool disposing = false;
+
+    private RecordSerializerFactory<TEntity> recordSerializerFactory;
 
     /// <summary>
     /// If this store has already started disposing
@@ -65,11 +65,7 @@ public class VestPocketStore<TEntity> : IDisposable where TEntity : class, IEnti
     {
         this.options = options;
         this.jsonTypeInfo = jsonTypeInfo;
-        this.jsonWriterOptions = new JsonWriterOptions()
-        {
-            Indented = false,
-            SkipValidation = true
-        };
+        this.recordSerializerFactory = new(jsonTypeInfo);
         ValidateOptions();
     }
 
@@ -111,7 +107,8 @@ public class VestPocketStore<TEntity> : IDisposable where TEntity : class, IEnti
                 SwapMemoryRewriteStream,
                 entityStore,
                 jsonTypeInfo,
-                options
+                options,
+                new RecordSerializerFactory<TEntity>(jsonTypeInfo)
             );
         }
         else
@@ -130,7 +127,8 @@ public class VestPocketStore<TEntity> : IDisposable where TEntity : class, IEnti
                 SwapFileRewriteStream,
                 entityStore,
                 jsonTypeInfo,
-                options
+                options, 
+                new RecordSerializerFactory<TEntity>(jsonTypeInfo)
                 );
         }
 
@@ -188,10 +186,11 @@ public class VestPocketStore<TEntity> : IDisposable where TEntity : class, IEnti
     {
         EnsureWriteAccess();
         var transaction = new MultipleTransaction<TEntity>(entities, throwOnException);
-        transaction.Payload = SerializeValues(entities);
+        var utf8JsonPayload = SerializeRecords(entities);
+        transaction.Utf8JsonPayload = utf8JsonPayload;
         transactionQueue.Enqueue(transaction);
         await transaction.Task;
-        transaction.ClearPayload();
+        ArrayPool<byte>.Shared.Return(utf8JsonPayload.Array);
         return transaction;
     }
 
@@ -207,10 +206,10 @@ public class VestPocketStore<TEntity> : IDisposable where TEntity : class, IEnti
     {
         EnsureWriteAccess();
         var transaction = new MultipleTransaction<TEntity>(entities, false);
-        transaction.Payload = SerializeValues(entities);
+        transaction.Utf8JsonPayload = SerializeRecords(entities);
         transactionQueue.Enqueue(transaction);
         await transaction.Task;
-        transaction.ClearPayload();
+        ArrayPool<byte>.Shared.Return(transaction.Utf8JsonPayload.Array);
         return !transaction.FailedConcurrency;
     }
 
@@ -232,16 +231,11 @@ public class VestPocketStore<TEntity> : IDisposable where TEntity : class, IEnti
     {
         var transaction = new UpdateTransaction<TEntity>(entity, basedOn, true);
         EnsureWriteAccess();
-        try
-        {
-            transaction.Payload = SerializeValue(entity);
-            transactionQueue.Enqueue(transaction);
-            await transaction.Task.ConfigureAwait(false);
-        }
-        finally
-        {
-            transaction.ClearPayload();
-        }
+
+        transaction.Utf8JsonPayload = SerializeRecord(entity);
+        transactionQueue.Enqueue(transaction);
+        await transaction.Task.ConfigureAwait(false);
+        ArrayPool<byte>.Shared.Return(transaction.Utf8JsonPayload.Array);
 
     }
 
@@ -259,72 +253,29 @@ public class VestPocketStore<TEntity> : IDisposable where TEntity : class, IEnti
     {
         EnsureWriteAccess();
         var transaction = new UpdateTransaction<TEntity>(entity, basedOn, false);
-        transaction.Payload = SerializeValue(entity);
+        transaction.Utf8JsonPayload = SerializeRecord(entity);
         transactionQueue.Enqueue(transaction);
         await transaction.Task.ConfigureAwait(false);
-        transaction.ClearPayload();
+        ArrayPool<byte>.Shared.Return(transaction.Utf8JsonPayload.Array);
         return (T)transaction.Entity;
     }
 
-    ThreadLocal<ArrayBufferWriter<byte>> localBuffer = new ThreadLocal<ArrayBufferWriter<byte>>(() => new ArrayBufferWriter<byte>());
-    ThreadLocal<Utf8JsonWriter> localJsonWriter = new ThreadLocal<Utf8JsonWriter>();
-    //ThreadLocal<ArrayBufferWriter<byte>> localPayloadBuffer = new ThreadLocal<ArrayBufferWriter<byte>>(() => new ArrayBufferWriter<byte>());
-    private ArraySegment<byte> SerializeValue<T>(T entity)
+    private ArraySegment<byte> SerializeRecords(TEntity[] entities)
     {
-        var buffer = localBuffer.Value;
-        buffer.ResetWrittenCount();
-        //var payloadBuffer = localPayloadBuffer.Value;
-        //payloadBuffer.ResetWrittenCount();
-
-        if (!localJsonWriter.IsValueCreated)
+        var serializer = recordSerializerFactory.Create();
+        foreach (var entity in entities)
         {
-            localJsonWriter.Value = new Utf8JsonWriter(buffer, jsonWriterOptions);
+            serializer.Serialize(entity.Key, entity);
         }
-        else
-        {
-            localJsonWriter.Value.Reset();
-        }
-        var jsonWriter = localJsonWriter.Value;
-
-        //jsonWriter.WriteStartObject();
-        //jsonWriter.WriteString("key"u8);
-        //jsonWriter.WritePropertyName("val"u8);
-        JsonSerializer.Serialize(jsonWriter, entity, jsonTypeInfo);
-        //jsonWriter.WriteEndObject();
-        //buffer.Write("}\n"u8);
-        buffer.Write(LF_Byte);
-        var pooledArray = ArrayPool<byte>.Shared.Rent(buffer.WrittenCount);
-        buffer.WrittenMemory.Span.CopyTo(pooledArray);
-        return new ArraySegment<byte>(pooledArray, 0, buffer.WrittenCount);
+        return serializer.RentWrittenBuffer();
     }
 
-    private ArraySegment<byte> SerializeValues<T>(T[] entities)
+    private ArraySegment<byte> SerializeRecord(TEntity entity)
     {
-        var buffer = localBuffer.Value;
-        buffer.ResetWrittenCount();
-        if (!localJsonWriter.IsValueCreated)
-        {
-            localJsonWriter.Value = new Utf8JsonWriter(buffer, jsonWriterOptions);
-        }
-        else
-        {
-            localJsonWriter.Value.Reset();
-        }
-        var jsonWriter = localJsonWriter.Value;
-
-        foreach(var entity in entities)
-        {
-            JsonSerializer.Serialize(jsonWriter, entity, jsonTypeInfo);
-            buffer.Write(LF_Byte);
-        }
-        //jsonWriter.WriteStartObject();
-        //jsonWriter.WriteString("key"u8, key);
-        //jsonWriter.WritePropertyName("val"u8);
-        //jsonWriter.WriteEndObject();
-        //buffer.Write("}\n"u8);
-        var pooledArray = ArrayPool<byte>.Shared.Rent(buffer.WrittenCount);
-        buffer.WrittenMemory.Span.CopyTo(pooledArray);
-        return new ArraySegment<byte>(pooledArray, 0, buffer.WrittenCount);
+        var serializer = recordSerializerFactory.Create();
+        serializer.Reset();
+        serializer.Serialize(entity.Key, entity);
+        return serializer.RentWrittenBuffer();
     }
 
     /// <summary>
@@ -339,10 +290,10 @@ public class VestPocketStore<TEntity> : IDisposable where TEntity : class, IEnti
     {
         EnsureWriteAccess();
         var transaction = new SingleTransaction<TEntity>(entity, true);
-        transaction.Payload = SerializeValue(entity);
+        transaction.Utf8JsonPayload = SerializeRecord(entity);
         transactionQueue.Enqueue(transaction);
         await transaction.Task.ConfigureAwait(false);
-        transaction.ClearPayload();
+        ArrayPool<byte>.Shared.Return(transaction.Utf8JsonPayload.Array);
         return (T)transaction.Entity;
     }
 
@@ -357,10 +308,10 @@ public class VestPocketStore<TEntity> : IDisposable where TEntity : class, IEnti
     {
         EnsureWriteAccess();
         var transaction = new SingleTransaction<TEntity>(entity, false);
-        transaction.Payload = SerializeValue(entity);
+        transaction.Utf8JsonPayload = SerializeRecord(entity);
         transactionQueue.Enqueue(transaction);
         await transaction.Task.ConfigureAwait(false);
-        transaction.ClearPayload();
+        ArrayPool<byte>.Shared.Return(transaction.Utf8JsonPayload.Array);
         return !transaction.FailedConcurrency;
     }
 
@@ -480,6 +431,11 @@ public class VestPocketStore<TEntity> : IDisposable where TEntity : class, IEnti
     public Task CreateBackup(string filePath)
     {
         return transactionStore.CreateBackup(filePath);
+    }
+
+    public Task CreateBackup(Stream stream)
+    {
+        return transactionStore.CreateBackup(stream, true);
     }
 
     private async Task LoadRecordsFromStore(CancellationToken cancellationToken)

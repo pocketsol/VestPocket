@@ -155,49 +155,6 @@ public class VestPocketStoreTests : IClassFixture<VestPocketStoreFixture>
         Assert.Equal(expected, actual);
     }
 
-    /// <summary>
-    /// Saves a document to the database, then performs a multi save that includes an update to the same document but with an
-    /// older version number. Expected result is a failure
-    /// </summary>
-    /// <returns></returns>
-    //[Fact]
-    //public async Task Save_MultipleChangesRejectedOnAnyOldVersionDocument()
-    //{
-
-    //    var testDoc = await testStore.Save(new TestDocument("1", 0, false, "body1"));
-        
-    //    var docWithOldVersion = testDoc with { Version= 0 }; 
-
-    //    Entity[] changes = new Entity[]
-    //    {
-    //        docWithOldVersion,
-    //        new TestDocument("2", 0, false, "body2"),
-    //        new Entity("3", 0, false)
-    //    };
-
-    //    await Assert.ThrowsAsync<ConcurrencyException>(async() => await testStore.Save(changes));
-    //}
-
-    //[Fact]
-    //public async Task TrySave_MultipleChangesRejectedOnAnyOldVersionDocument()
-    //{
-
-    //    var testDoc = await testStore.Save(new TestDocument("1", 0, false, "body1"));
-
-    //    var docWithOldVersion = testDoc with { Version = 0 };
-
-    //    Entity[] changes = new Entity[]
-    //    {
-    //        docWithOldVersion,
-    //        new TestDocument("2", 0, false, "body2"),
-    //        new Entity("3", 0, false)
-    //    };
-    //    var expectedTrySave = false;
-    //    var actualTrySave = await testStore.TrySave(changes);
-
-    //    Assert.Equal(expectedTrySave, actualTrySave);
-    //}
-
     [Fact]
     public async Task Save_FailsWhenReadOnly()
     {
@@ -218,6 +175,33 @@ public class VestPocketStoreTests : IClassFixture<VestPocketStoreFixture>
         var fileNonEmpty = fileSize > 0;
         File.Delete(filePath);
         Assert.True(fileNonEmpty);
+    }
+
+    [Fact]
+    public async Task Backup_ToMemory()
+    {
+        await testStore.Save(new TestDocument("SomeKey", 0, false, "SomeDoc"));
+        using var backupMem = new MemoryStream();
+        await testStore.CreateBackup(backupMem);
+        var memLength = backupMem.Length;
+        var memNotEmpty = memLength > 0;
+        Assert.True(memNotEmpty);
+    }
+
+    [Fact]
+    public async Task Backup_CanReadBackupEntities()
+    {
+        string filePath = "backup.db";
+        if (File.Exists(filePath)) File.Delete(filePath);
+        var testDocument = new TestDocument("SomeKey", 0, false, "SomeDoc");
+        await testStore.Save(testDocument);
+        await testStore.CreateBackup(filePath);
+        using var backupStore = new VestPocketStore<Entity>(SourceGenerationContext.Default.Entity, new VestPocketOptions { FilePath = filePath});
+        await backupStore.OpenAsync(CancellationToken.None);
+        var testDocumentRetrieved = backupStore.Get("SomeKey");
+        await backupStore.Close(CancellationToken.None);
+        File.Delete(filePath);
+        Assert.Equal(testDocument, testDocumentRetrieved);
     }
 
 }

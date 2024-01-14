@@ -19,7 +19,7 @@ internal abstract class Transaction<T> where T : IEntity
     public abstract T this[int index] { get; set; }
     public bool ThrowOnError { get; }
 
-    public ArraySegment<byte> Payload;
+    public ArraySegment<byte> Utf8JsonPayload;
     public bool IsComplete => taskCompletionSource.Task.IsCompleted;
 
     public Transaction(bool throwOnError)
@@ -40,13 +40,5 @@ internal abstract class Transaction<T> where T : IEntity
     }
 
     public Task Task => taskCompletionSource.Task;
-
-    public void ClearPayload()
-    {
-        if (Payload.Array is not null)
-        {
-            ArrayPool<byte>.Shared.Return(Payload.Array);
-        }
-    }
 
 }
