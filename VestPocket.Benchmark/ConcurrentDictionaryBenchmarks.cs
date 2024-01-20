@@ -30,7 +30,7 @@ namespace VestPocket.Benchmark
         {
             for (int i = 0; i < N; i++)
             {
-                this.dictionary.TryAdd(i.ToString(), new Entity(i.ToString(), false, $"Test Body {i}"));
+                this.dictionary.TryAdd(i.ToString(), new Entity( $"Test Body {i}"));
             }
             testDocument = this.dictionary[testKey];
         }

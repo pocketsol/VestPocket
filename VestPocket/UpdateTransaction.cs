@@ -7,25 +7,25 @@ using TrieHard.PrefixLookup;
 
 namespace VestPocket
 {
-    internal class UpdateTransaction<T> : Transaction<T> where T : IEntity
+    internal class UpdateTransaction: Transaction
     {
-        private T entity;
-        private readonly T basedOn;
+        private Kvp entity;
+        private readonly object basedOn;
 
-        public T Entity { get => entity; internal set => entity = value; }
+        public Kvp Record { get => entity; internal set => entity = value; }
 
-        public UpdateTransaction(T entity, T basedOn, bool throwOnError) : base(throwOnError)
+        public UpdateTransaction(Kvp entity, object basedOn, bool throwOnError) : base(throwOnError)
         {
             this.entity = entity;
             this.basedOn = basedOn;
         }
 
-        public override bool Validate(T existingEntity)
+        public override bool Validate(object existingEntity)
         {
             var matches = MatchesExisting(existingEntity);
             if (!matches)
             {
-                entity = existingEntity;
+                entity = new Kvp(entity.Key, existingEntity);
                 if (ThrowOnError)
                 {
                     SetError(new ConcurrencyException(entity.Key));
@@ -38,22 +38,22 @@ namespace VestPocket
             return matches;
         }
 
-        private bool MatchesExisting(T existingEntity)
+        private bool MatchesExisting(object existingEntity)
         {
             if (basedOn is null && existingEntity is null)
             {
                 return true;
             }
-            if (basedOn is IEquatable<T> equatable)
-            {
-                return equatable.Equals(existingEntity);
-            }
+            //if (basedOn is IEquatable equatable)
+            //{
+            //    return equatable.Equals(existingEntity);
+            //}
             return existingEntity.Equals(basedOn);
         }
 
         public override int Count => 1;
 
-        public override T this[int index]
+        public override Kvp this[int index]
         {
             get
             {

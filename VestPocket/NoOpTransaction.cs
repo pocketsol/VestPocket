@@ -1,12 +1,6 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-
-namespace VestPocket
+﻿namespace VestPocket
 {
-    internal sealed class NoOpTransaction<T> : Transaction<T> where T : IEntity
+    internal sealed class NoOpTransaction : Transaction
     {
 
         public NoOpTransaction():base(false)
@@ -14,7 +8,7 @@ namespace VestPocket
 
         }
 
-        public override T this[int index] { 
+        public override Kvp this[int index] { 
             get => throw new NotImplementedException(); 
             set => throw new NotImplementedException(); 
         }

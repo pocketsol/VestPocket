@@ -8,11 +8,11 @@ public class VestPocketBenchmarks
 {
 
     public int N = 999_999;
-    private VestPocketStore<Entity> store;
+    private VestPocketStore store;
     private string testKey = "123456";
-    private Entity testDocument;
+    private Kvp testDocument;
 
-    private Entity[] testDocuments = new Entity[10];
+    private Kvp[] testDocuments = new Kvp[10];
 
     public VestPocketBenchmarks()
     {
@@ -29,72 +29,65 @@ public class VestPocketBenchmarks
         }
 
         var options = new VestPocketOptions();
+        options.JsonSerializerContext = SourceGenerationContext.Default;
+
+        options.AddType<Entity>();
         options.FilePath = null;
         options.RewriteRatio = 1;
         options.Durability = VestPocketDurability.FileSystemCache;
         
-        store = new VestPocketStore<Entity>(SourceGenerationContext.Default.Entity, options);
+        store = new VestPocketStore(options);
         store.OpenAsync(CancellationToken.None).Wait();
 
         Task[] setResults = new Task[N];
         for (int i = 0; i < N; i++)
         {
-            setResults[i] = store.Save(new Entity(i.ToString(), false, $"Test Body {i}"));
+            setResults[i] = store.Save(new Kvp(i.ToString(), new Entity($"Test Body {i}")));
         }
         Task.WaitAll(setResults);
-        testDocument = store.Get<Entity>(testKey);
+        testDocument = new Kvp(testKey, store.Get<Entity>(testKey));
 
         for(int i = 0; i < testDocuments.Length; i++)
         {
-            testDocuments[i] = store.Get<Entity>(i.ToString());
+            testDocuments[i] = new Kvp(i.ToString(), store.Get<Entity>(i.ToString()));
         }
     }
 
     [Benchmark]
-    public void GetByKey()
+    public Entity GetByKey()
     {
-        var document = store.Get(testKey);
-        if (document == null)
-        {
-            throw new Exception();
-        }
+        return store.Get<Entity>(testKey);
     }
 
     [Benchmark]
-    public async Task SetKey()
+    public Kvp GetByKeyUntyped()
     {
-        testDocument = await store.Save(testDocument);
+        return store.Get(testKey);
     }
 
     [Benchmark]
-    public async Task SetTenPerTransaction()
+    public async Task<Kvp> SetKey()
     {
-        testDocuments = await store.Save(testDocuments);
+        return await store.Save(testDocument);
+    }
+
+    [Benchmark]
+    public async Task<Kvp[]> SetTenPerTransaction()
+    {
+        return await store.Save(testDocuments);
     }
 
     
     [Benchmark]
-    public void GetByPrefix()
+    public object GetByPrefix()
     {
-        foreach (var result in store.GetByPrefix<Entity>("1234"))
-        {
-            if (result.Key == null)
-            {
-                throw new Exception();
-            }
-        }
-    }
-
-    [Benchmark]
-    public void GetByPrefix_BaseType()
-    {
+        object entity = null;
         foreach (var result in store.GetByPrefix("1234"))
         {
-            if (result.Key == null)
-            {
-                throw new Exception();
-            }
+            entity = result.Value;
         }
+        return entity;
     }
+
 
 }

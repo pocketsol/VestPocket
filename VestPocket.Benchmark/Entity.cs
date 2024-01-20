@@ -7,7 +7,7 @@ using System.Threading.Tasks;
 
 namespace VestPocket.Benchmark
 {
-    public record class Entity(string Key, bool Deleted, string Body) : IEntity
+    public record class Entity(string Body)
     {
     }
 

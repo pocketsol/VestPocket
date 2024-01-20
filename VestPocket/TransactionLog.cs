@@ -4,6 +4,7 @@ using System.Text.Json;
 using System.Text.Json.Serialization.Metadata;
 using System.IO.Compression;
 using System.Buffers;
+using System.Text.Json.Serialization;
 
 namespace VestPocket;
 
@@ -13,17 +14,17 @@ namespace VestPocket;
 /// Shrinking removed data from the file doubles as backing up the transaction
 /// store, as it requires rewriting.
 /// </summary>
-internal class TransactionLog<T> : IDisposable where T : class, IEntity
+internal class TransactionLog : IDisposable
 {
-    private readonly VestPocketStore<T> store;
+    private readonly VestPocketStore store;
     private Stream outputStream;
     private FileStream fileOutputStream;
     private readonly Func<Stream> rewriteStreamFactory;
     private readonly Func<Stream, Stream, Stream> swapRewriteStreamCallback;
-    private readonly EntityStore<T> memoryStore;
-    private readonly JsonTypeInfo<T> jsonTypeInfo;
+    private readonly EntityStore memoryStore;
+    private readonly JsonSerializerContext jsonSerializerContext;
     private readonly VestPocketOptions options;
-    private readonly RecordSerializerFactory<T> recordSerializerFactory;
+    private readonly RecordSerializerFactory recordSerializerFactory;
     private int unflushed = 0;
     private readonly object rewriteLock = new();
     private Task rewriteTask;
@@ -44,14 +45,13 @@ internal class TransactionLog<T> : IDisposable where T : class, IEntity
     public bool RewriteReadyToComplete { get => rewriteReadyToComplete; }
 
     public TransactionLog(
-        VestPocketStore<T> store,
+        VestPocketStore store,
         Stream outputStream,
         Func<Stream> rewriteStreamFactory,
         Func<Stream, Stream, Stream> swapRewriteStreamCallback,
-        EntityStore<T> memoryStore,
-        JsonTypeInfo<T> jsonTypeInfo,
+        EntityStore memoryStore,
         VestPocketOptions options,
-        RecordSerializerFactory<T> recordSerializer
+        RecordSerializerFactory recordSerializer
         )
     {
         this.store = store;
@@ -60,7 +60,7 @@ internal class TransactionLog<T> : IDisposable where T : class, IEntity
         this.rewriteStreamFactory = rewriteStreamFactory;
         this.swapRewriteStreamCallback = swapRewriteStreamCallback;
         this.memoryStore = memoryStore;
-        this.jsonTypeInfo = jsonTypeInfo;
+        this.jsonSerializerContext = options.JsonSerializerContext;
         this.options = options;
         this.recordSerializerFactory = recordSerializer;
         this.hasFlushableOutput = fileOutputStream != null;
@@ -105,9 +105,9 @@ internal class TransactionLog<T> : IDisposable where T : class, IEntity
         {
             var serializer = recordSerializerFactory.Create();
 
-            foreach (var item in memoryStore.Lookup.SearchValues(ReadOnlySpan<byte>.Empty))
+            foreach (var item in memoryStore.Lookup.Search(ReadOnlySpan<byte>.Empty))
             {
-                serializer.Serialize(item.Key, item);
+                serializer.Serialize(item.Key, item.Value);
                 if (serializer.Written > 16_384)
                 {
                     if (isDisposing) return;
@@ -204,7 +204,7 @@ internal class TransactionLog<T> : IDisposable where T : class, IEntity
 
     }
 
-    public async IAsyncEnumerable<T> LoadRecords([EnumeratorCancellation] CancellationToken cancellationToken)
+    public async IAsyncEnumerable<Kvp> LoadRecords([EnumeratorCancellation] CancellationToken cancellationToken)
     {
 
         if (outputStream.Length == 0)
@@ -252,7 +252,7 @@ internal class TransactionLog<T> : IDisposable where T : class, IEntity
 
     }
 
-    private async IAsyncEnumerable<T> ReadEntitiesFromStream(Stream stream, byte[] findNewLineBuffer, [EnumeratorCancellation] CancellationToken cancellationToken)
+    private async IAsyncEnumerable<Kvp> ReadEntitiesFromStream(Stream stream, byte[] findNewLineBuffer, [EnumeratorCancellation] CancellationToken cancellationToken)
     {
         using var viewStream = new ViewStream();
         var buffer = ArrayPool<byte>.Shared.Rent(4096);
@@ -282,7 +282,7 @@ internal class TransactionLog<T> : IDisposable where T : class, IEntity
 
             viewStream.SetStream(stream, startPosition, (nextLineFeedPosition - startPosition) + 1);
 
-            Record<T> record = default;
+            Kvp record = default;
             try
             {
                 var lengthToRead = Convert.ToInt32(viewStream.Length);
@@ -297,14 +297,14 @@ internal class TransactionLog<T> : IDisposable where T : class, IEntity
             catch (Exception)
             {
             }
-            if (record.Entity != null)
+            if (record.Value != null)
             {
-                yield return record.Entity;
+                yield return record;
             }
         }
     }
 
-    private Record<T> DeserializeRecordFromBuffer(byte[] buffer, int length)
+    private Kvp DeserializeRecordFromBuffer(byte[] buffer, int length)
     {
         var serializer = recordSerializerFactory.Create();
         var sequence = new ReadOnlySequence<byte>(buffer, 0, length);
@@ -358,7 +358,7 @@ internal class TransactionLog<T> : IDisposable where T : class, IEntity
         }
     }
 
-    public long WriteTransaction(Transaction<T> transaction)
+    public long WriteTransaction(Transaction transaction)
     {
         long bytesWritten = WriteDocumentPayload(transaction.Utf8JsonPayload);
         transaction.Complete();
@@ -488,7 +488,7 @@ internal class TransactionLog<T> : IDisposable where T : class, IEntity
         await CreateBackup(backupFileStream, false);
     }
 
-    private async IAsyncEnumerable<byte[]> GetCompressedRewriteSegments(IEnumerable<T> entities, [EnumeratorCancellation] CancellationToken cancellationToken)
+    private async IAsyncEnumerable<byte[]> GetCompressedRewriteSegments(IEnumerable<object> entities, [EnumeratorCancellation] CancellationToken cancellationToken)
     {
         using var serializeStream = new MemoryStream();
         var compressedBackingStream = new MemoryStream();
@@ -496,7 +496,7 @@ internal class TransactionLog<T> : IDisposable where T : class, IEntity
 
         foreach (var entity in entities)
         {
-            await JsonSerializer.SerializeAsync<T>(serializeStream, entity, jsonTypeInfo, cancellationToken);
+            await JsonSerializer.SerializeAsync(serializeStream, entity, entity.GetType(), jsonSerializerContext, cancellationToken);
             serializeStream.Write(LF, 0, 1);
 
             // half of the large object heap size

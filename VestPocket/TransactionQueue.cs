@@ -9,23 +9,23 @@ namespace VestPocket;
 /// Responsible for processing each transaction and passing the results to the entity store
 /// and to the transaction log.
 /// </summary>
-internal class TransactionQueue<TBaseType> where TBaseType : class, IEntity
+internal class TransactionQueue
 {
-    private readonly TransactionLog<TBaseType> transactionStore;
-    private readonly EntityStore<TBaseType> memoryStore;
+    private readonly TransactionLog transactionStore;
+    private readonly EntityStore memoryStore;
     private Task processQueuesTask;
     private CancellationTokenSource processQueuesCancellationTokenSource;
-    private readonly Channel<Transaction<TBaseType>> queueItemChannel;
+    private readonly Channel<Transaction> queueItemChannel;
 
     public TransactionMetrics Metrics { get; init; } = new();
 
 
     public TransactionQueue(
-        TransactionLog<TBaseType> transactionStore,
-        EntityStore<TBaseType> memoryStore
+        TransactionLog transactionStore,
+        EntityStore memoryStore
     )
     {
-        this.queueItemChannel = Channel.CreateUnbounded<Transaction<TBaseType>>(new UnboundedChannelOptions { SingleReader = true, AllowSynchronousContinuations = false });
+        this.queueItemChannel = Channel.CreateUnbounded<Transaction>(new UnboundedChannelOptions { SingleReader = true, AllowSynchronousContinuations = false });
         this.transactionStore = transactionStore;
         this.memoryStore = memoryStore;
     }
@@ -58,7 +58,7 @@ internal class TransactionQueue<TBaseType> where TBaseType : class, IEntity
         {
             while (!cancellationToken.IsCancellationRequested )
             {
-                Transaction<TBaseType> transaction = await queueItemChannel.Reader.ReadAsync(cancellationToken);
+                Transaction transaction = await queueItemChannel.Reader.ReadAsync(cancellationToken);
 
                 if (transactionStore.RewriteReadyToComplete)
                 {
@@ -93,7 +93,7 @@ internal class TransactionQueue<TBaseType> where TBaseType : class, IEntity
 
     }
 
-    public void Enqueue(Transaction<TBaseType> transaction)
+    public void Enqueue(Transaction transaction)
     {
         if (!queueItemChannel.Writer.TryWrite(transaction))
         {

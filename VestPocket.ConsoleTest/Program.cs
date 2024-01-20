@@ -9,31 +9,32 @@ namespace VestPocket.ConsoleTest;
 
 class Program
 {
-    static VestPocketStore<Entity> connection;
+    static VestPocketStore connection;
 
 
     static async Task Main(string[] args)
     {
 
-        int threads = 15;
+        int threads = 8;
         int iterations = 10000;
 
         Console.WriteLine("---------Running VestPocket---------");
 
         var options = new VestPocketOptions();
-        //options.FilePath = null;
+        options.JsonSerializerContext = SourceGenerationContext.Default;
+        options.AddType<Entity>();;
         options.RewriteRatio = 1;
         options.Durability = VestPocketDurability.FileSystemCache;
 
         RemoveDatabaseFile(options);
-        connection = new VestPocketStore<Entity>(SourceGenerationContext.Default.Entity, options);
+        connection = new VestPocketStore(options);
         await connection.OpenAsync(CancellationToken.None);
 
         await TimeIterations("Create Entities", (thread, i) =>
         {
             for (int j = 0; j < 1000; j++)
             {
-                var entity = new Entity($"{thread}-{i}", 0, false, $"""Just some body text {thread}-{i}""");
+                var entity = new Entity($"""Just some body text {thread}-{i}""");
                 if (entity == null)
                 {
                     throw new Exception();
@@ -45,7 +46,8 @@ class Program
 
         await TimeIterations("Save Entities", async (thread, i) =>
         {
-            await connection.Save(new Entity($"{thread}-{i}", 0, false, $"""Just some body text {thread}-{i}"""));
+            var key = $"{thread}-{i}";
+            await connection.Save(new Kvp(key, new Entity($"""Just some body text {thread}-{i}""")));
         }, threads, iterations);
 
         await connection.ForceMaintenance();
@@ -61,14 +63,15 @@ class Program
 
         await TimeIterations($"Save Entities Batched", async (thread, i) =>
         {
-            var entities = new Entity[100];
+            var entities = new Kvp[100];
             int iterationKey = 0;
             while (iterationKey < iterations)
             {
                 for (int j = 0; j < entities.Length; j++)
                 {
+                    var key = $"{thread}-{iterationKey}";
                     iterationKey++;
-                    entities[j] = new Entity($"{thread}-{iterationKey}", 1, false, $"""Just some body text {thread}-{i}""");
+                    entities[j] = new Kvp(key, new Entity($"""Just some body text {thread}-{i}"""));
                     if (iterationKey == iterations)
                     {
                         break;
@@ -83,10 +86,9 @@ class Program
 
         await TimeIterations("Prefix Search", (thread, i) =>
         {
-            var prefixSearch = connection.GetByPrefix<Entity>(thread.ToString() + "-99");
-            foreach(var result in prefixSearch)
+            foreach(var result in connection.GetByPrefix($"{thread}-99"))
             {
-                if (result == null)
+                if (result.Value is null)
                 {
                     throw new Exception("Failed to get prefix result");
                 }
@@ -96,19 +98,21 @@ class Program
 
         await TimeIterations("Read and Write Mix", async (thread, i) =>
         {
-            var entity = connection.Get<Entity>($"{thread}-{i}");
+            var key = $"{thread}-{i}";
+            var entity = connection.Get<Entity>(key);
+            var record = new Kvp(key, entity);
 
-            await connection.Save(entity);
-            entity = connection.Get<Entity>($"{thread}-{i}");
-            entity = connection.Get<Entity>($"{thread}-{i}");
+            await connection.Save(record);
+            entity = connection.Get<Entity>(key);
+            entity = connection.Get<Entity>(key);
 
-            entity = await connection.Save(entity);
-            entity = connection.Get<Entity>($"{thread}-{i}");
-            entity = connection.Get<Entity>($"{thread}-{i}");
+            record = await connection.Save(record);
+            entity = connection.Get<Entity>(key);
+            entity = connection.Get<Entity>(key);
 
-            entity = await connection.Save(entity);
-            entity = connection.Get<Entity>($"{thread}-{i}");
-            entity = connection.Get<Entity>($"{thread}-{i}");
+            record = await connection.Save(record);
+            entity = connection.Get<Entity>(key);
+            entity = connection.Get<Entity>(key);
 
         }, threads, iterations, 10);
 

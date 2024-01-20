@@ -1,24 +1,19 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-
+﻿
 namespace VestPocket
 {
-    internal sealed class SingleTransaction<T> : Transaction<T> where T : IEntity
+    internal sealed class SingleTransaction : Transaction
     {
-        private T entity;
-        public T Entity { get => entity; internal set => entity = value; }
+        private Kvp entity;
+        public Kvp Entity { get => entity; internal set => entity = value; }
 
-        public SingleTransaction(T entity, bool throwOnError) : base(throwOnError)
+        public SingleTransaction(Kvp entity, bool throwOnError) : base(throwOnError)
         {
             this.entity = entity;
         }
 
         public override int Count => 1;
 
-        public override T this[int index] { 
+        public override Kvp this[int index] { 
             get
             {
                 if (index != 0) throw new IndexOutOfRangeException();
