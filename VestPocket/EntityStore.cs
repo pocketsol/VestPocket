@@ -1,6 +1,4 @@
-﻿using TrieHard.PrefixLookup;
-
-namespace VestPocket;
+﻿namespace VestPocket;
 
 /// <summary>
 /// A light transactional wrapper around storing entities in memory.

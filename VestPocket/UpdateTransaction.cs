@@ -1,70 +1,62 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-using TrieHard.PrefixLookup;
+﻿namespace VestPocket;
 
-namespace VestPocket
+internal class UpdateTransaction: Transaction
 {
-    internal class UpdateTransaction: Transaction
+    private Kvp entity;
+    private readonly object basedOn;
+
+    public Kvp Record { get => entity; internal set => entity = value; }
+
+    public UpdateTransaction(Kvp entity, object basedOn, bool throwOnError) : base(throwOnError)
     {
-        private Kvp entity;
-        private readonly object basedOn;
+        this.entity = entity;
+        this.basedOn = basedOn;
+    }
 
-        public Kvp Record { get => entity; internal set => entity = value; }
-
-        public UpdateTransaction(Kvp entity, object basedOn, bool throwOnError) : base(throwOnError)
+    public override bool Validate(object existingEntity)
+    {
+        var matches = MatchesExisting(existingEntity);
+        if (!matches)
         {
-            this.entity = entity;
-            this.basedOn = basedOn;
+            entity = new Kvp(entity.Key, existingEntity);
+            if (ThrowOnError)
+            {
+                SetError(new ConcurrencyException(entity.Key));
+            }
+            else
+            {
+                Complete();
+            }
         }
+        return matches;
+    }
 
-        public override bool Validate(object existingEntity)
+    private bool MatchesExisting(object existingEntity)
+    {
+        if (basedOn is null && existingEntity is null)
         {
-            var matches = MatchesExisting(existingEntity);
-            if (!matches)
-            {
-                entity = new Kvp(entity.Key, existingEntity);
-                if (ThrowOnError)
-                {
-                    SetError(new ConcurrencyException(entity.Key));
-                }
-                else
-                {
-                    Complete();
-                }
-            }
-            return matches;
+            return true;
         }
+        //if (basedOn is IEquatable equatable)
+        //{
+        //    return equatable.Equals(existingEntity);
+        //}
+        return existingEntity.Equals(basedOn);
+    }
 
-        private bool MatchesExisting(object existingEntity)
+    public override int Count => 1;
+
+    public override Kvp this[int index]
+    {
+        get
         {
-            if (basedOn is null && existingEntity is null)
-            {
-                return true;
-            }
-            //if (basedOn is IEquatable equatable)
-            //{
-            //    return equatable.Equals(existingEntity);
-            //}
-            return existingEntity.Equals(basedOn);
+            if (index != 0) throw new IndexOutOfRangeException();
+            return entity;
         }
-
-        public override int Count => 1;
-
-        public override Kvp this[int index]
+        set
         {
-            get
-            {
-                if (index != 0) throw new IndexOutOfRangeException();
-                return entity;
-            }
-            set
-            {
-                if (index != 0) throw new IndexOutOfRangeException();
-                entity = value;
-            }
+            if (index != 0) throw new IndexOutOfRangeException();
+            entity = value;
         }
     }
 }

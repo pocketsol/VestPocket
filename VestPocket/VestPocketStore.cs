@@ -1,6 +1,5 @@
 ﻿using System.Buffers;
 using System.IO;
-using TrieHard.PrefixLookup;
 
 namespace VestPocket;
 
@@ -254,7 +253,7 @@ public class VestPocketStore : IDisposable
         var serializer = recordSerializerFactory.Create();
         foreach (var entity in entities)
         {
-            serializer.Serialize(entity.Key, entity);
+            serializer.Serialize(entity.Key, entity.Value);
         }
         return serializer.RentWrittenBuffer();
     }
@@ -262,7 +261,6 @@ public class VestPocketStore : IDisposable
     private ArraySegment<byte> SerializeRecord(Kvp record)
     {
         var serializer = recordSerializerFactory.Create();
-        serializer.Reset();
         serializer.Serialize(record.Key, record.Value);
         return serializer.RentWrittenBuffer();
     }
@@ -322,18 +320,6 @@ public class VestPocketStore : IDisposable
     {
         return new Kvp(key, entityStore.Get(key));
     }
-
-    ///// <summary>
-    ///// Performs a prefix search for values that have keys starting with the supplied 
-    ///// prefix value.
-    ///// </summary>
-    ///// <typeparam name="T">The type of entities to retrieve</typeparam>
-    ///// <param name="prefix">The case sensitive key prefix to search for</param>
-    ///// <returns>tThe search results. PrefixResults implement IDisposable</returns>
-    //public IEnumerable<KeyValuePair<string, T>> GetByPrefix<T>(string prefix)
-    //{
-    //    return entityStore.GetByPrefix(prefix).Select(x => new KeyValuePair<string, T>(x.Key, (T)x.Value));
-    //}
 
     /// <summary>
     /// Performs a prefix search for values that have keys starting with the supplied 
