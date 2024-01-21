@@ -150,12 +150,7 @@ public class VestPocketStoreTests : IClassFixture<VestPocketStoreFixture>
             new Kvp("3", new TestDocument("body3")),
         };
 
-        var updated = await testStore.Save(changes);
-
-        var expected = changes.Length;
-        var actual = updated.Length;
-
-        Assert.Equal(expected, actual);
+        await testStore.Save(changes);
     }
 
     [Fact]

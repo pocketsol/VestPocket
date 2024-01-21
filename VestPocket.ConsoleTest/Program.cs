@@ -22,8 +22,8 @@ class Program
 
         var options = new VestPocketOptions();
         options.JsonSerializerContext = SourceGenerationContext.Default;
-        options.AddType<Entity>();;
-        options.RewriteRatio = 1;
+        options.AddType<Entity>();
+        options.RewriteRatio = 10;
         options.Durability = VestPocketDurability.FileSystemCache;
 
         RemoveDatabaseFile(options);

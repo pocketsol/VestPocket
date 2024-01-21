@@ -1,5 +1,4 @@
 ﻿using BenchmarkDotNet.Attributes;
-using BenchmarkDotNet.Jobs;
 
 namespace VestPocket.Benchmark;
 
@@ -12,7 +11,7 @@ public class VestPocketBenchmarks
     private string testKey = "123456";
     private Kvp testDocument;
 
-    private Kvp[] testDocuments = new Kvp[10];
+    private Kvp[] entities1000 = new Kvp[1000];
 
     public VestPocketBenchmarks()
     {
@@ -32,7 +31,6 @@ public class VestPocketBenchmarks
         options.JsonSerializerContext = SourceGenerationContext.Default;
 
         options.AddType<Entity>();
-        options.FilePath = null;
         options.RewriteRatio = 1;
         options.Durability = VestPocketDurability.FileSystemCache;
         
@@ -47,9 +45,10 @@ public class VestPocketBenchmarks
         Task.WaitAll(setResults);
         testDocument = new Kvp(testKey, store.Get<Entity>(testKey));
 
-        for(int i = 0; i < testDocuments.Length; i++)
+        for (int i = 0; i < entities1000.Length; i++)
         {
-            testDocuments[i] = new Kvp(i.ToString(), store.Get<Entity>(i.ToString()));
+            string key = i.ToString();
+            entities1000[i] = new Kvp(key, store.Get<Entity>(key));
         }
     }
 
@@ -66,18 +65,18 @@ public class VestPocketBenchmarks
     }
 
     [Benchmark]
-    public async Task<Kvp> SetKey()
+    public async Task<Kvp> Save()
     {
         return await store.Save(testDocument);
     }
 
     [Benchmark]
-    public async Task<Kvp[]> SetTenPerTransaction()
+    public async Task Save1000()
     {
-        return await store.Save(testDocuments);
+        await store.Save(entities1000);
     }
 
-    
+
     [Benchmark]
     public object GetByPrefix()
     {

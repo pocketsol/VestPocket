@@ -165,41 +165,14 @@ public class VestPocketStore : IDisposable
     /// Returns an array that contains the saved entities with their new version numbers.
     /// </returns>
     /// <exception>ConcurrencyException</exception>
-    public async Task<Kvp[]> Save(Kvp[] entities)
-    {
-        var transaction = await Save(entities, true);
-        return transaction.Entities;
-    }
-
-    private async Task<MultipleTransaction> Save(Kvp[] entities, bool throwOnException)
+    public async Task Save(Kvp[] entities)
     {
         EnsureWriteAccess();
-        var transaction = new MultipleTransaction(entities, throwOnException);
-        var utf8JsonPayload = SerializeRecords(entities);
-        transaction.Utf8JsonPayload = utf8JsonPayload;
-        transactionQueue.Enqueue(transaction);
-        await transaction.Task;
-        ArrayPool<byte>.Shared.Return(utf8JsonPayload.Array);
-        return transaction;
-    }
-
-    /// <summary>
-    /// Tries to save an array of entities as a transaction to the store.
-    /// Does not throw an optimistic concurrency exception if entities fail to save
-    /// due to having stale versions. 
-    /// </summary>
-    /// <typeparam name="T">The type of entities to save</typeparam>
-    /// <param name="entities">The entities to save to the store</param>
-    /// <returns>True if all the entities saved successfully or false if the transaction failed due to any entity being out of date.</returns>
-    public async Task<bool> TrySave<T>(Kvp[] entities)
-    {
-        EnsureWriteAccess();
-        var transaction = new MultipleTransaction(entities, false);
-        transaction.Utf8JsonPayload = SerializeRecords(entities);
+        var transaction = new MultipleTransaction(entities, true);
+        transaction.Utf8JsonPayload = SerializeRecords(entities); ;
         transactionQueue.Enqueue(transaction);
         await transaction.Task;
         ArrayPool<byte>.Shared.Return(transaction.Utf8JsonPayload.Array);
-        return !transaction.FailedConcurrency;
     }
 
     //public async Task Delete<T>(T entity) where T : class, TEntity
@@ -266,8 +239,7 @@ public class VestPocketStore : IDisposable
     }
 
     /// <summary>
-    /// Saves an entity to the store. Will throw a ConcurrencyException if the version of the entity saved
-    /// is not the current version in the store
+    /// Saves an entity to the store.
     /// </summary>
     /// <param name="entity">The entity to save to the store</param>
     /// <returns>The entity that was saved in the store with an updated version</returns>
@@ -283,22 +255,6 @@ public class VestPocketStore : IDisposable
         return transaction.Entity;
     }
 
-    /// <summary>
-    /// Saves an entity to the store. Will not throw exceptions if the entity fails to save due to
-    /// concurrency issues.
-    /// </summary>
-    /// <param name="entity">The entity to save to the store</param>
-    /// <returns>True if the entity was saved or false if it failed to save</returns>
-    public async Task<bool> TrySave(Kvp entity)
-    {
-        EnsureWriteAccess();
-        var transaction = new SingleTransaction(entity, false);
-        transaction.Utf8JsonPayload = SerializeRecord(entity);
-        transactionQueue.Enqueue(transaction);
-        await transaction.Task.ConfigureAwait(false);
-        ArrayPool<byte>.Shared.Return(transaction.Utf8JsonPayload.Array);
-        return !transaction.FailedConcurrency;
-    }
 
     /// <summary>
     /// Looks up an entity by key
