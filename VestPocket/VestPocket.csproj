@@ -24,10 +24,5 @@
       <None Include="icon.png" Pack="true" PackagePath="\" />
       <None Include="..\README.md" Pack="true" PackagePath="\" />
   </ItemGroup>
-
-  <ItemGroup>
-    <PackageReference Include="PrefixLookup" Version="0.1.8" />
-    <PackageReference Include="DotNext.IO" Version="4.15.0" />
-  </ItemGroup>
   
 </Project>

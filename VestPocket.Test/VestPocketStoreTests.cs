@@ -11,7 +11,7 @@ namespace VestPocket.Test;
 public class VestPocketStoreTests : IClassFixture<VestPocketStoreFixture>
 {
 
-    private VestPocketStore<Entity> testStore;
+    private VestPocketStore testStore;
     private VestPocketStoreFixture fixture;
 
     public VestPocketStoreTests(VestPocketStoreFixture fixture)
@@ -28,23 +28,19 @@ public class VestPocketStoreTests : IClassFixture<VestPocketStoreFixture>
     public async Task CanCRUD()
     {
         var key = "crud";
-        var entity = new TestDocument (key, 0, false, "crud body");
+        var entity = new Kvp(key, new TestDocument ("crud body"));
         var entitySaved = await testStore.Save(entity);
-        var entitySavedExpected = entity with {Version = 1};
-        
-        Assert.Equal(entitySavedExpected, entitySaved);
 
         var entityRetreived = testStore.Get<TestDocument>(key);
-        Assert.Equal(entitySavedExpected, entityRetreived);
+        Assert.Equal(entitySaved.Value, entityRetreived);
 
-        var entityToUpdate = entityRetreived with {Body = "crud body updated"}; 
-        var expectedUpdatedEntity = entityToUpdate with {Version = 2};
-        var entityUpdated = await testStore.Save(entityToUpdate);
+        var entityToUpdate = new Kvp(key, entityRetreived with {Body = "crud body updated"});
+        var entityUpdated = await testStore.Swap(entityToUpdate, entityRetreived);
 
-        Assert.Equal(expectedUpdatedEntity, entityUpdated);
+        Assert.Equal(entityToUpdate.Value, entityUpdated);
 
-        var toDelete = entityUpdated with { Deleted = true };
-        await testStore.Save(toDelete);
+        var toDelete = new Kvp(key, null);
+        await testStore.Update(toDelete, entityUpdated);
         var deletedDocument = testStore.Get<TestDocument>(key);
         Assert.Null(deletedDocument);
     }
@@ -53,10 +49,12 @@ public class VestPocketStoreTests : IClassFixture<VestPocketStoreFixture>
     public async Task TracksDeadSpace()
     {
         string key = "key";
-        var entity1 = new TestDocument(key, 0, false, "some contents1");
-        await testStore.Save(entity1);
-        var entity2 = entity1 with { Body = "some contents2", Version = 1};
-        await testStore.Save(entity2);
+        var entity1 = new TestDocument("some contents1");
+        var record1 = new Kvp(key, entity1);
+        await testStore.Save(record1);
+        var entity2 = entity1 with { Body = "some contents2"};
+        var record2 = new Kvp(key, entity2);
+        await testStore.Save(record2);
         var deadSpace = testStore.DeadEntityCount;
         var deadSpaceGreaterThanZero = deadSpace > 0;
         Assert.True(deadSpaceGreaterThanZero);
@@ -66,10 +64,12 @@ public class VestPocketStoreTests : IClassFixture<VestPocketStoreFixture>
     public async Task CanMaintainDeadSpace()
     {
         string key = "key";
-        var entity1 = new TestDocument(key, 0, false, "some contents1");
-        await testStore.Save(entity1);
-        var entity2 = entity1 with { Body = "some contents2", Version = 1 };
-        await testStore.Save(entity2);
+        var entity1 = new TestDocument("some contents1");
+        var record1 = new Kvp(key, entity1);
+        await testStore.Save(record1);
+        var entity2 = entity1 with { Body = "some contents2"};
+        var record2 = new Kvp(key, entity2);
+        await testStore.Save(record2);
         var deadSpace = testStore.DeadEntityCount;
 
         var deadSpaceBeforeMaintenance = testStore.DeadEntityCount;
@@ -85,10 +85,10 @@ public class VestPocketStoreTests : IClassFixture<VestPocketStoreFixture>
         string key = "prefix";
         string prefix = "pre";
         string body = "body";
-        var expectedDocument = await testStore.Save(new TestDocument(key, 0, false, body));
-        var prefixResults = testStore.GetByPrefix<TestDocument>(prefix);
+        var expectedDocument = await testStore.Save(new Kvp(key, new TestDocument(body)));
+        var prefixResults = testStore.GetByPrefix(prefix);
         var firstMatchByPrefix = prefixResults.FirstOrDefault();
-        Assert.Equal(expectedDocument, firstMatchByPrefix);
+        Assert.Equal(expectedDocument.Value, firstMatchByPrefix.Value);
     }
 
     [Fact]
@@ -98,10 +98,10 @@ public class VestPocketStoreTests : IClassFixture<VestPocketStoreFixture>
         string prefix = "prefix";
         string body = "body";
 
-        var expectedDocument = await testStore.Save(new TestDocument(key, 0, false, body));
-        var prefixResults = testStore.GetByPrefix<TestDocument>(prefix);
+        var expectedDocument = await testStore.Save(new Kvp(key, new TestDocument(body)));
+        var prefixResults = testStore.GetByPrefix(prefix);
         var firstMatchByPrefix = prefixResults.FirstOrDefault();
-        Assert.Equal(expectedDocument, firstMatchByPrefix);
+        Assert.Equal(expectedDocument.Value, firstMatchByPrefix.Value);
     }
 
 
@@ -111,8 +111,8 @@ public class VestPocketStoreTests : IClassFixture<VestPocketStoreFixture>
         var key = "crud";
         var notKey = "CrUd";
 
-        await testStore.Save(new TestDocument(key, 0, false, "doc1"));
-        await testStore.Save(new TestDocument(notKey, 0, false, "doc2"));
+        await testStore.Save(new Kvp(key, new TestDocument("doc1")));
+        await testStore.Save(new Kvp(notKey, new TestDocument("doc2")));
 
         var doc1 = testStore.Get<TestDocument>(key);
         var doc2 = testStore.Get<TestDocument>(notKey);
@@ -121,102 +121,45 @@ public class VestPocketStoreTests : IClassFixture<VestPocketStoreFixture>
     }
 
     [Fact]
-    public async Task Save_FailsWithOldVersionDocument()
+    public async Task Swap_DoesNotSwapBasedOnOldDocument()
     {
         var key = "crud";
-        var version1 = await testStore.Save(new TestDocument(key, 0, false, "doc1"));
-        var version0 = version1 with { Version = 0 };
-        await Assert.ThrowsAsync<ConcurrencyException>(async () => await testStore.Save(version0));
-    }
+        var doc1 = new TestDocument("version1");
+        var doc2 = new TestDocument("version2");
+        var doc3 = new TestDocument("version3");
 
-    [Fact]
-    public async Task TrySave_ReturnsFalseOnOldVersionDocument()
-    {
-        var key = "crud";
-        var version1 = await testStore.Save(new TestDocument(key, 0, false, "doc1"));
-        var version0 = version1 with { Version = 0 };
-        var expected = false;
-        var actual = await testStore.TrySave(version0);
-        Assert.Equal(expected, actual);
-    }
+        var record1 = new Kvp(key, doc1);
+        await testStore.Save(record1);
 
-    [Fact]
-    public async Task Delete_FailsWithOldVersionDocument()
-    {
-        var key = "crud";
-        var version1 = await testStore.Save(new TestDocument(key, 0, false, "doc1"));
-        var version0 = version1 with { Deleted = true, Version = 0 };
-        await Assert.ThrowsAsync<ConcurrencyException>(async () => await testStore.Save(version0));
+        var record2 = new Kvp(key, doc2);
+        var expectedDocument = await testStore.Save(record2);
+
+        var record3 = new Kvp(key, doc3);
+        var finalStoreDocument = await testStore.Swap(record3, doc1);
+        Assert.Equal(record2.Value, finalStoreDocument);
     }
 
     [Fact]
     public async Task Save_CanProcessMultipleEntitiesAsTransaction()
     {
 
-        var changes = new Entity[]
+        var changes = new Kvp[]
         {
-            new TestDocument("1", 0, false, "body1"),
-            new TestDocument("2", 0, false, "body2"),
-            new Entity("3", 0, false)
+            new Kvp("1", new TestDocument("body1")),
+            new Kvp("2", new TestDocument("body2")),
+            new Kvp("3", new TestDocument("body3")),
         };
 
-        var updated = await testStore.Save(changes);
-
-        var expected = changes.Length;
-        var actual = updated.Length;
-
-        Assert.Equal(expected, actual);
-    }
-
-    /// <summary>
-    /// Saves a document to the database, then performs a multi save that includes an update to the same document but with an
-    /// older version number. Expected result is a failure
-    /// </summary>
-    /// <returns></returns>
-    [Fact]
-    public async Task Save_MultipleChangesRejectedOnAnyOldVersionDocument()
-    {
-
-        var testDoc = await testStore.Save(new TestDocument("1", 0, false, "body1"));
-        
-        var docWithOldVersion = testDoc with { Version= 0 }; 
-
-        Entity[] changes = new Entity[]
-        {
-            docWithOldVersion,
-            new TestDocument("2", 0, false, "body2"),
-            new Entity("3", 0, false)
-        };
-
-        await Assert.ThrowsAsync<ConcurrencyException>(async() => await testStore.Save(changes));
-    }
-
-    [Fact]
-    public async Task TrySave_MultipleChangesRejectedOnAnyOldVersionDocument()
-    {
-
-        var testDoc = await testStore.Save(new TestDocument("1", 0, false, "body1"));
-
-        var docWithOldVersion = testDoc with { Version = 0 };
-
-        Entity[] changes = new Entity[]
-        {
-            docWithOldVersion,
-            new TestDocument("2", 0, false, "body2"),
-            new Entity("3", 0, false)
-        };
-        var expectedTrySave = false;
-        var actualTrySave = await testStore.TrySave(changes);
-
-        Assert.Equal(expectedTrySave, actualTrySave);
+        await testStore.Save(changes);
     }
 
     [Fact]
     public async Task Save_FailsWhenReadOnly()
     {
         var readonlyStore = fixture.Get(VestPocketOptions.DefaultReadOnly, false);
-        var testDocument = new TestDocument("key", 0, false, "body");
-        await Assert.ThrowsAsync<Exception>(async () => await readonlyStore.Save(testDocument));
+        var testDocument = new TestDocument("body");
+        var testRecord = new Kvp("key", testDocument);
+        await Assert.ThrowsAsync<Exception>(async () => await readonlyStore.Save(testRecord));
     }
 
     [Fact]
@@ -224,13 +167,45 @@ public class VestPocketStoreTests : IClassFixture<VestPocketStoreFixture>
     {
         string filePath = "backup.db";
         if (File.Exists(filePath)) File.Delete(filePath);
-        await testStore.Save(new TestDocument("SomeKey", 0, false, "SomeDoc"));
+        await testStore.Save(new Kvp("SomeKey", new TestDocument("SomeDoc")));
         await testStore.CreateBackup(filePath);
         var fileInfo = new FileInfo(filePath);
         var fileSize = fileInfo.Length;
         var fileNonEmpty = fileSize > 0;
         File.Delete(filePath);
         Assert.True(fileNonEmpty);
+    }
+
+    [Fact]
+    public async Task Backup_ToMemory()
+    {
+        await testStore.Save(new Kvp("SomeKey", new TestDocument("SomeDoc")));
+        using var backupMem = new MemoryStream();
+        await testStore.CreateBackup(backupMem);
+        var memLength = backupMem.Length;
+        var memNotEmpty = memLength > 0;
+        backupMem.Position = 0;
+        var asUtf8 = System.Text.Encoding.UTF8.GetString(backupMem.ToArray());
+        Assert.True(memNotEmpty);
+    }
+
+    [Fact]
+    public async Task Backup_CanReadBackupEntities()
+    {
+        string filePath = "backup.db";
+        if (File.Exists(filePath)) File.Delete(filePath);
+        var testDocument = new TestDocument("SomeDoc");
+        var testRecord = new Kvp("SomeKey", testDocument);
+        await testStore.Save(testRecord);
+        await testStore.CreateBackup(filePath);
+        var options = new VestPocketOptions { FilePath = filePath, JsonSerializerContext = SourceGenerationContext.Default };
+        options.AddType<TestDocument>();
+        using var backupStore = new VestPocketStore(options);
+        await backupStore.OpenAsync(CancellationToken.None);
+        var testDocumentRetrieved = backupStore.Get("SomeKey");
+        await backupStore.Close(CancellationToken.None);
+        File.Delete(filePath);
+        Assert.Equal(testRecord, testDocumentRetrieved);
     }
 
 }

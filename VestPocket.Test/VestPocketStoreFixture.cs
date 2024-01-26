@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Text.Json.Serialization;
 using System.Threading;
 
 namespace VestPocket.Test;
@@ -10,15 +11,18 @@ public class VestPocketStoreFixture : IDisposable
     {
     }
 
-    private VestPocketStore<Entity> _connection;
+    private VestPocketStore _connection;
 
-    public VestPocketStore<Entity> Get(VestPocketOptions options, bool blankFilePath = true)
+    public VestPocketStore Get(VestPocketOptions options, bool blankFilePath = true)
     {
         if (blankFilePath)
         {
             options.FilePath = null;
         }
-        var result = new VestPocketStore<Entity>(SourceGenerationContext.Default.Entity, options);
+        options.JsonSerializerContext = SourceGenerationContext.Default;
+
+        options.AddType<TestDocument>();
+        var result = new VestPocketStore(options);
         result.OpenAsync(CancellationToken.None).Wait();
         _connection = result;
         return result;

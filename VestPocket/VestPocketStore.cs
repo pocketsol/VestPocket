@@ -1,9 +1,5 @@
 ﻿using System.Buffers;
 using System.IO;
-using System.Text.Json;
-using System.Text.Json.Serialization.Metadata;
-using DotNext.Buffers;
-using TrieHard.PrefixLookup;
 
 namespace VestPocket;
 
@@ -11,19 +7,19 @@ namespace VestPocket;
 /// Represents access to a VestPocket store for storing entities that inherit from TEntity.
 /// This is the main API for interacting with a VestPocket store.
 /// </summary>
-/// <typeparam name="TEntity">The base entity type of the VestPocketStore</typeparam>
-public class VestPocketStore<TEntity> : IDisposable where TEntity : class, IEntity
+public class VestPocketStore : IDisposable
 {
     private readonly VestPocketOptions options;
-    private readonly JsonTypeInfo<TEntity> jsonTypeInfo;
-    private readonly JsonWriterOptions jsonWriterOptions;
-    private const byte LF_Byte = 10;
+    //private readonly JsonWriterOptions jsonWriterOptions;
+    //private const byte LF_Byte = 10;
 
-    private TransactionQueue<TEntity> transactionQueue;
-    private TransactionLog<TEntity> transactionStore;
-    private EntityStore<TEntity> entityStore;
+    private TransactionQueue transactionQueue;
+    private TransactionLog transactionStore;
+    private EntityStore entityStore;
     private string directory;
     private bool disposing = false;
+
+    private RecordSerializerFactory recordSerializerFactory;
 
     /// <summary>
     /// If this store has already started disposing
@@ -55,20 +51,13 @@ public class VestPocketStore<TEntity> : IDisposable where TEntity : class, IEnti
     /// <summary>
     /// Instantiates a new instance of the VestPocketStore class
     /// </summary>
-    /// <param name="jsonTypeInfo">The JsonTypeInfo to use for serialization of entities inheriting from TEntity</param>
     /// <param name="options">The configuration options to use with this VestPocketStore when opening it</param>
-    public VestPocketStore(
-        JsonTypeInfo<TEntity> jsonTypeInfo, VestPocketOptions options
-        )
+    public VestPocketStore(VestPocketOptions options)
     {
         this.options = options;
-        this.jsonTypeInfo = jsonTypeInfo;
-        this.jsonWriterOptions = new JsonWriterOptions()
-        {
-            Indented = false,
-            SkipValidation = true
-        };
         ValidateOptions();
+        this.options.Freeze();
+        this.recordSerializerFactory = new(options);
     }
 
     private void ValidateOptions()
@@ -95,21 +84,21 @@ public class VestPocketStore<TEntity> : IDisposable where TEntity : class, IEnti
     public async Task OpenAsync(CancellationToken cancellationToken)
     {
 
-        this.entityStore = new EntityStore<TEntity>(readOnly: options.ReadOnly);
+        this.entityStore = new EntityStore(readOnly: options.ReadOnly);
 
-        TransactionLog<TEntity> transactionStore = null;
+        TransactionLog transactionStore = null;
 
         if (options.FilePath == null)
         {
             var memoryStream = new MemoryStream();
-            transactionStore = new TransactionLog<TEntity>(
+            transactionStore = new TransactionLog(
                 this,
                 memoryStream,
                 () => new MemoryStream(),
                 SwapMemoryRewriteStream,
                 entityStore,
-                jsonTypeInfo,
-                options
+                options,
+                new RecordSerializerFactory(options)
             );
         }
         else
@@ -121,14 +110,14 @@ public class VestPocketStore<TEntity> : IDisposable where TEntity : class, IEnti
 
             var file = new FileStream(options.FilePath, FileMode.OpenOrCreate, fileAccess, fileShare, 4096);
 
-            transactionStore = new TransactionLog<TEntity>(
+            transactionStore = new TransactionLog(
                 this,
                 file,
                 RewriteFileStreamFactory,
                 SwapFileRewriteStream,
                 entityStore,
-                jsonTypeInfo,
-                options
+                options, 
+                new RecordSerializerFactory(options)
                 );
         }
 
@@ -137,7 +126,7 @@ public class VestPocketStore<TEntity> : IDisposable where TEntity : class, IEnti
 
         if (!options.ReadOnly)
         {
-            this.transactionQueue = new TransactionQueue<TEntity>(transactionStore, entityStore);
+            this.transactionQueue = new TransactionQueue(transactionStore, entityStore);
             await this.transactionQueue.Start();
         }
 
@@ -176,90 +165,96 @@ public class VestPocketStore<TEntity> : IDisposable where TEntity : class, IEnti
     /// Returns an array that contains the saved entities with their new version numbers.
     /// </returns>
     /// <exception>ConcurrencyException</exception>
-    public async Task<TEntity[]> Save(TEntity[] entities)
+    public async Task Save(Kvp[] entities)
     {
         EnsureWriteAccess();
-        var transaction = new Transaction<TEntity>(entities, true);
-        using var buffer = new PooledArrayBufferWriter<byte>();
-        using var writer = new Utf8JsonWriter(buffer, jsonWriterOptions);
-        foreach(var entity in entities)
-        {
-            JsonSerializer.Serialize(writer, entity, jsonTypeInfo);
-            buffer.Write(LF_Byte);
-        }
-        transaction.payload = buffer.WrittenMemory;
+        var transaction = new MultipleTransaction(entities, true);
+        transaction.Utf8JsonPayload = SerializeRecords(entities); ;
         transactionQueue.Enqueue(transaction);
         await transaction.Task;
-        return transaction.Entities;
+        ArrayPool<byte>.Shared.Return(transaction.Utf8JsonPayload.Array);
     }
 
-    /// <summary>
-    /// Tries to save an array of entities as a transaction to the store.
-    /// Does not throw an optimistic concurrency exception if entities fail to save
-    /// due to having stale versions. 
-    /// </summary>
-    /// <typeparam name="T">The type of entities to save</typeparam>
-    /// <param name="entities">The entities to save to the store</param>
-    /// <returns>True if all the entities saved successfully or false if the transaction failed due to any entity being out of date.</returns>
-    public async Task<bool> TrySave<T>(T[] entities) where T : class, TEntity
-    {
-        EnsureWriteAccess();
-        var transaction = new Transaction<TEntity>(entities, false);
-        using var buffer = new PooledArrayBufferWriter<byte>();
-        var writer = new Utf8JsonWriter(buffer, jsonWriterOptions);
-        foreach (var entity in entities)
-        {
-            JsonSerializer.Serialize(writer, entity, jsonTypeInfo);
-            buffer.Write(LF_Byte);
-        }
-        transaction.payload = buffer.WrittenMemory;
-        transactionQueue.Enqueue(transaction);
-        await transaction.Task;
-        return !transaction.FailedConcurrency;
-    }
+    //public async Task Delete<T>(T entity) where T : class, TEntity
+    //{
+    //    await Update(null, entity);
+    //}
 
     /// <summary>
-    /// Saves an entity to the store. Will throw a ConcurrencyException if the version of the entity saved
-    /// is not the current version in the store
+    /// Saves an entity to the store, but only if the entity in the store
+    /// still matches the entity that this change was based off of. Throws a ConcurrencyException
+    /// if the entity currently stored does not match the basedOn parameter.
     /// </summary>
     /// <typeparam name="T">The type of entity to save</typeparam>
+    /// <param name="entity">The entity to save</param>
+    /// <param name="basedOn">The entity that is expected to currently to be in the store that
+    /// the changes to the 'entity' parameter were applied to. Pass as null if no stored value is expected.</param>
+    public async Task Update<T>(Kvp entity, T basedOn)
+    {
+        var transaction = new UpdateTransaction(entity, basedOn, true);
+        EnsureWriteAccess();
+        transaction.Utf8JsonPayload = SerializeRecord(entity);
+        transactionQueue.Enqueue(transaction);
+        await transaction.Task.ConfigureAwait(false);
+        ArrayPool<byte>.Shared.Return(transaction.Utf8JsonPayload.Array);
+
+    }
+
+    /// <summary>
+    /// Saves an entity to the store, but only if the entity in the store
+    /// still matches the entity that this change was based on. This is similar to 
+    /// a compare and swap operation.
+    /// </summary>
+    /// <typeparam name="T">The type of entity to save</typeparam>
+    /// <param name="entity">The entity to save</param>
+    /// <param name="basedOn">The entity that is expected to currently to be in the store that
+    /// the changes to the 'entity' parameter were applied to. Pass as null if no stored value is expected.</param>
+    /// <returns>The entity stored for the key after the operation</returns>
+    public async Task<T> Swap<T>(Kvp entity, T basedOn)
+    {
+        EnsureWriteAccess();
+        var transaction = new UpdateTransaction(entity, basedOn, false);
+        transaction.Utf8JsonPayload = SerializeRecord(entity);
+        transactionQueue.Enqueue(transaction);
+        await transaction.Task.ConfigureAwait(false);
+        ArrayPool<byte>.Shared.Return(transaction.Utf8JsonPayload.Array);
+        return (T)transaction.Record.Value;
+    }
+
+    private ArraySegment<byte> SerializeRecords(Kvp[] entities)
+    {
+        var serializer = recordSerializerFactory.Create();
+        foreach (var entity in entities)
+        {
+            serializer.Serialize(entity.Key, entity.Value);
+        }
+        return serializer.RentWrittenBuffer();
+    }
+
+    private ArraySegment<byte> SerializeRecord(Kvp record)
+    {
+        var serializer = recordSerializerFactory.Create();
+        serializer.Serialize(record.Key, record.Value);
+        return serializer.RentWrittenBuffer();
+    }
+
+    /// <summary>
+    /// Saves an entity to the store.
+    /// </summary>
     /// <param name="entity">The entity to save to the store</param>
     /// <returns>The entity that was saved in the store with an updated version</returns>
     /// <exception>ConcurrencyException</exception>
-    public async Task<T> Save<T>(T entity) where T : class, TEntity
+    public async Task<Kvp> Save(Kvp entity)
     {
         EnsureWriteAccess();
-        var transaction = new Transaction<TEntity>(entity, true);
-        using var buffer = new PooledArrayBufferWriter<byte>();
-        using var writer = new Utf8JsonWriter(buffer, jsonWriterOptions);
-        JsonSerializer.Serialize(writer, entity, jsonTypeInfo);
-        buffer.Write(LF_Byte);
-        transaction.payload = buffer.WrittenMemory;
+        var transaction = new SingleTransaction(entity, true);
+        transaction.Utf8JsonPayload = SerializeRecord(entity);
         transactionQueue.Enqueue(transaction);
         await transaction.Task.ConfigureAwait(false);
-        return (T)transaction.Entity;
+        ArrayPool<byte>.Shared.Return(transaction.Utf8JsonPayload.Array);
+        return transaction.Entity;
     }
 
-    /// <summary>
-    /// Saves an entity to the store. Will not throw exceptions if the entity fails to save due to
-    /// concurrency issues.
-    /// </summary>
-    /// <typeparam name="T">The type of the entity to save</typeparam>
-    /// <param name="entity">The entity to save to the store</param>
-    /// <returns>True if the entity was saved or false if it failed to save</returns>
-    public async Task<bool> TrySave<T>(T entity) where  T : class, TEntity
-    {
-        EnsureWriteAccess();
-        var transaction = new Transaction<TEntity>(entity, false);
-        using var buffer = new PooledArrayBufferWriter<byte>();
-        var writer = new Utf8JsonWriter(buffer, jsonWriterOptions);
-        JsonSerializer.Serialize(writer, entity, jsonTypeInfo);
-        buffer.Write(LF_Byte);
-        transaction.payload = buffer.WrittenMemory;
-        transactionQueue.Enqueue(transaction);
-        await transaction.Task.ConfigureAwait(false);
-        return !transaction.FailedConcurrency;
-    }
 
     /// <summary>
     /// Looks up an entity by key
@@ -267,7 +262,7 @@ public class VestPocketStore<TEntity> : IDisposable where TEntity : class, IEnti
     /// <typeparam name="T">The type of the entity</typeparam>
     /// <param name="key">The exact key of the entity to find</param>
     /// <returns>The entity stored with the key specified or null</returns>
-    public T Get<T>(string key) where T : class, TEntity
+    public T Get<T>(string key) where T : class
     {
         return entityStore.Get(key) as T;
     }
@@ -277,21 +272,9 @@ public class VestPocketStore<TEntity> : IDisposable where TEntity : class, IEnti
     /// </summary>
     /// <param name="key">The exact key of the entity to find</param>
     /// <returns>The entity stored with the key specified or null</returns>
-    public TEntity Get(string key)
+    public Kvp Get(string key)
     {
-        return entityStore.Get(key);
-    }
-
-    /// <summary>
-    /// Performs a prefix search for values that have keys starting with the supplied 
-    /// prefix value.
-    /// </summary>
-    /// <typeparam name="T">The type of entities to retrieve</typeparam>
-    /// <param name="prefix">The case sensitive key prefix to search for</param>
-    /// <returns>tThe search results. PrefixResults implement IDisposable</returns>
-    public IEnumerable<T> GetByPrefix<T>(string prefix) where T : class, TEntity
-    {
-        return entityStore.GetByPrefix<T>(prefix);
+        return new Kvp(key, entityStore.Get(key));
     }
 
     /// <summary>
@@ -299,7 +282,7 @@ public class VestPocketStore<TEntity> : IDisposable where TEntity : class, IEnti
     /// prefix value.
     /// </summary>
     /// <param name="prefix">The case sensitive key prefix to search for</param>
-    public PrefixLookup<TEntity>.ValueEnumerator GetByPrefix(string prefix)
+    public PrefixLookup<object>.Enumerator GetByPrefix(string prefix)
     {
         return entityStore.GetByPrefix(prefix);
     }
@@ -379,6 +362,17 @@ public class VestPocketStore<TEntity> : IDisposable where TEntity : class, IEnti
         return transactionStore.CreateBackup(filePath);
     }
 
+    /// <summary>
+    /// Creates a backup of a VestPocket store to a writable System.IO.Stream. This can be used
+    /// while the store is still open to make a copy of the store to a location other than
+    /// to disk.
+    /// </summary>
+    /// <param name="stream">The stream to write the backup to</param>
+    public Task CreateBackup(Stream stream)
+    {
+        return transactionStore.CreateBackup(stream, true);
+    }
+
     private async Task LoadRecordsFromStore(CancellationToken cancellationToken)
     {
         entityStore.BeginLoading();
@@ -431,7 +425,7 @@ public class VestPocketStore<TEntity> : IDisposable where TEntity : class, IEnti
 
     internal async Task QueueNoOpTransaction()
     {
-        var transaction = new Transaction<TEntity>();
+        var transaction = new NoOpTransaction();
         transactionQueue.Enqueue(transaction);
         await transaction.Task;
     }

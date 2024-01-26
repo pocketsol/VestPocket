@@ -1,3 +1,6 @@
+using System.Collections.Frozen;
+using System.Text.Json.Serialization;
+
 namespace VestPocket;
 
 /// <summary>
@@ -9,7 +12,7 @@ public class VestPocketOptions
     /// <summary>
     /// A VestPocketOptions instance created with default options
     /// </summary>
-    public static readonly VestPocketOptions Default = new();
+    public static VestPocketOptions Default => new();
     
     /// <summary>
     /// A VestPocketOptions instance created with default options, except it is ReadOnly
@@ -62,6 +65,58 @@ public class VestPocketOptions
     /// The strategy for file durability that will be used with this VestPocketStore.
     /// </summary>
     public VestPocketDurability Durability { get; set; } = VestPocketDurability.FlushOnDelay;
+
+    /// <summary>
+    /// The JsonSerializerContext which contains the source generated JsonTypeInfo objects
+    /// thaat VestPocket will use to serialize and deserialize user defined types.
+    /// </summary>
+    public JsonSerializerContext JsonSerializerContext { get; set; }
+
+    internal FrozenDictionary<string, StorageType> DeserializationTypes { get; set; }
+
+    internal FrozenDictionary<Type, StorageType> SerializationTypes { get; set; }
+
+    private List<StorageType> storageTypes = new();
+
+    /// <summary>
+    /// Adds a type that can be stored in the VestPocketStore.
+    /// </summary>
+    /// <typeparam name="T">The type to add</typeparam>
+    /// <param name="jsonTypeName">When VestPocket serializes a complex object, it also stores the name of the type in a $type property (from the objects Type.Name). This parameter can override the $type property used.</param>
+    public void AddType<T>(string jsonTypeName = null)
+    {
+        ThrowIfFrozen();
+        Type typeToRegister = typeof(T);
+        if (jsonTypeName is null)
+        {
+            jsonTypeName = typeToRegister.Name;
+        }
+        var jsonTypeInfo = JsonSerializerContext.GetTypeInfo(typeToRegister);
+        var storageType = new StorageType(jsonTypeName, typeToRegister, jsonTypeInfo, System.Text.Encoding.UTF8.GetBytes(jsonTypeName));
+        storageTypes.Add(storageType);
+    }
+
+    private void ThrowIfFrozen()
+    {
+        if (frozen)
+        {
+            throw new ArgumentException("Cannot make changes to a frozen VestPocketOptions object");
+        }
+    }
+
+    static internal readonly byte[] StringNameUtf8 = "string"u8.ToArray();
+
+    private bool frozen = false;
+    internal void Freeze()
+    {
+        if (frozen) return;
+        frozen = true;
+
+        var typesByName = storageTypes.Select(x => new KeyValuePair<string, StorageType>(x.TypeName, x));
+        var typesByType = storageTypes.Select(x => new KeyValuePair<Type, StorageType>(x.Type, x));
+        DeserializationTypes = typesByName.ToFrozenDictionary();
+        SerializationTypes = typesByType.ToFrozenDictionary();
+    }
 
     /// <summary>
     /// Returns the first validation failure message, or null if the options appear valid

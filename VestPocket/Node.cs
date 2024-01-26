@@ -6,484 +6,439 @@ namespace VestPocket;
 /// A typed Radix Tree Node containing a payload value of type <typeparamref name="T"/>.
 /// </summary>
 /// <typeparam name="T">The entity stored within this node</typeparam>
-internal class Node<T> where T : class, IEntity
+internal class Node<T>
 {
-    public string KeySegment;
-    public Node<T>[] Children = Empty;
-    public static readonly Node<T>[] Empty = Array.Empty<Node<T>>();
+    public string Key;
+    private ReadOnlyMemory<byte> KeySegment = EmptyBytes;
+    public ReadOnlyMemory<byte> KeyBytes = EmptyBytes;
+
+    public Node<T>[] childrenBuffer = EmptyNodes;
+    private Span<Node<T>> Children => childrenBuffer.AsSpan();
     public T Value;
-    public char FirstChar;
+    public byte FirstKeyByte;
 
-    public Node()
+    public static readonly Node<T>[] EmptyNodes = Array.Empty<Node<T>>();
+    public static readonly byte[] EmptyBytes = [];
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private int FindChildByFirstByte(byte searchKeyByte)
     {
-        this.KeySegment = String.Empty;
-    }
+        // The 'default' search is a basic binary search (see the 'default' case
+        // But if we specialize and unroll for other size counts, those sizes
+        // can have improved performance. 
+        var buffer = childrenBuffer;
+        int childCount = childrenBuffer.Length;
 
-    public Node(string label)
-    {
-        this.KeySegment = label;
-        this.FirstChar = KeySegment[0];
-    }
-
-    public void SetValue(ref Node<T> rootNode, in ReadOnlySpan<char> key, T value)
-    {
-        var searchNode = rootNode;
-        var searchKey = key;
-    FakeTailRecursion:
-        // Set on a child
-        var searchFirstChar = searchKey[0];
-        Node<T> matchingChild = null;
-        int childIndex = 0;
-        for (int i = 0; i < searchNode.Children.Length; i++)
+        switch (childCount)
         {
-            Node<T> child = searchNode.Children[i];
+            case 0: return ~0;
+            case 1:
+                int cmp = buffer[0].FirstKeyByte - searchKeyByte;
+                if (cmp == 0) return 0;
+                return cmp > 0 ? ~0 : ~1;
+            //if (buffer[0].FirstKeyByte == searchKeyByte) return 0;
+            //if (buffer[0].FirstKeyByte > searchKeyByte) return ~0;
+            //return ~1;
+            case 2:
+                if (buffer[1].FirstKeyByte == searchKeyByte) return 1;
+                if (buffer[0].FirstKeyByte == searchKeyByte) return 0;
 
-            if (child.FirstChar == searchFirstChar)
-            {
-                childIndex = i;
-                matchingChild = child;
-                break;
-            }
-            if (child.FirstChar > searchFirstChar)
-            {
-                break;
-            }
-            childIndex = i + 1;
-        }
+                if (buffer[0].FirstKeyByte > searchKeyByte) return ~0;
+                if (buffer[1].FirstKeyByte > searchKeyByte) return ~1;
+                return ~2;
+            case 3:
+                if (buffer[2].FirstKeyByte == searchKeyByte) return 2;
+                if (buffer[1].FirstKeyByte == searchKeyByte) return 1;
+                if (buffer[0].FirstKeyByte == searchKeyByte) return 0;
 
-        //var matchingChild = searchNode.FindMatchingChild(searchKey, out var matchingLength, out var matchingIndex);
-        if (matchingChild is not null)
-        {
-            var matchingLength = searchKey.CommonPrefixLength(matchingChild.KeySegment);
-            if (matchingLength == searchKey.Length)
-            {
-                if (matchingLength == matchingChild.KeySegment.Length)
+                if (buffer[0].FirstKeyByte > searchKeyByte) return ~0;
+                if (buffer[1].FirstKeyByte > searchKeyByte) return ~1;
+                if (buffer[2].FirstKeyByte > searchKeyByte) return ~2;
+                return ~3;
+            case 10:
+                // Size 10 is very important. If this tree is used
+                // to store codes and ids, then its likely many
+                // nodes will only have children for decimals
+
+                // Unroll loop and manually binary search
+                int cmp5 = buffer[5].FirstKeyByte - searchKeyByte;
+                if (cmp5 == 0) return 5;
+                if (cmp5 < 0)
                 {
-                    // We found a child node that matches our key exactly
-                    // E.g. Key = "apple" and child key = "apple"
-                    matchingChild.Value = value;
-                }
-                else
-                {
-
-                    // https://en.wikipedia.org/wiki/Radix_tree#/media/File:Inserting_the_word_'team'_into_a_Patricia_trie_with_a_split.png
-
-                    // We matched the whole set key, but not the entire child key. We need to split the child key
-                    //matchingChild.SplitKeySegmentAtLength(matchingLength);
-                    searchNode.SplitChild(matchingLength, childIndex);
-                    matchingChild = searchNode.Children[childIndex];
-                    matchingChild.Value = value;
-                }
-
-            }
-            else
-            {
-                // We matched part of the set key on a child
-                if (matchingLength == matchingChild.KeySegment.Length)
-                {
-                    // and the entire child key
-                    searchKey = searchKey.Slice(matchingLength);
-                    searchNode = matchingChild;
-                    goto FakeTailRecursion;
-                }
-                else
-                {
-                    // and only part of the child key
-                    searchNode.SplitChild(matchingLength, childIndex);
-                    matchingChild = searchNode.Children[childIndex];
-                    searchKey = searchKey.Slice(matchingLength);
-                    searchNode = matchingChild;
-                    goto FakeTailRecursion;
-
-                }
-            }
-        }
-        else
-        {
-            // There were no matching children. 
-            // E.g. Key = "apple" and no child that even starts with 'a'. Add a new child node
-            string keySegment = new string(searchKey);
-            var newChild = new Node<T>(keySegment);
-            newChild.Value = value;
-            searchNode.AddChild(ref rootNode, newChild, childIndex);
-        }
-    }
-
-    public Node<T> Clone()
-    {
-        return new Node<T>(KeySegment)
-        {
-            Children = Children,
-            Parent = Parent,
-            ParentIndex = ParentIndex,
-            Value = Value
-        };
-    }
-
-    public Node<T> NextSibling => Parent.Children.Length > ParentIndex + 1 ? Parent.Children[ParentIndex + 1] : null;
-    public Node<T> FirstChild => Children.Length > 0 ? Children[0] : null;
-    public Node<T> Back => Parent.KeySegment.Length > 0 ? Parent : null;
-    public Node<T> Next => FirstChild ?? NextSibling ?? Back;
-
-    private void AddChild(ref Node<T> rootNode, Node<T> newChild, int afterIndex)
-    {
-        if (Children.Length == 0)
-        {
-            newChild.ParentIndex = 0;
-            newChild.Parent = this;
-            Children = new Node<T>[1] { newChild };
-        }
-        else
-        {
-            // This operation is messy.
-            // We are inserting the new child into the correct place for it
-            // to be sorted in the array, but we need to copy and replace
-            // any nodes that require patches to their Paret/ParentIndex values
-            // in a concurrent safe way.
-
-            // Right now this patches the references on clones of the children
-            // onto a clone of 'this' then replaces the node reference in its 
-            // parent with the clone of this (effectively replacing the current
-            // node in the graph with a patched clone containing the changes).
-
-            // Being done as a single assignment with a single writer allows this
-            // to work and pass concurrency checks.
-            var newSelf = this.KeySegment == string.Empty ? this : this.Clone();
-            newChild.Parent = newSelf;
-            var newLength = newSelf.Children.Length + 1;
-            var newChildArray = new Node<T>[newLength];
-
-            // Poor man's sorted insert
-            // We could probably greatly reduce the performance implications
-            // here by not doing a sorted insert and copy of the current node
-            // but for larger child collections (utilizing UTF8 keys for example)
-            // being able to use binary searches on sorted children should offer
-            // improved performance
-            for(int i = 0; i < newChildArray.Length; i++)
-            {
-                if (i == afterIndex)
-                {
-                    newChildArray[i] = newChild;
-                }
-                else
-                {
-                    int offset = i > afterIndex ? -1 : 0;
-                    newChildArray[i] = newSelf.Children[i + offset].Clone();
-                    newChildArray[i].ParentIndex = i;
-                    foreach (var clonedChild in newChildArray[i].Children)
+                    int cmp8 = buffer[8].FirstKeyByte - searchKeyByte;
+                    if (cmp8 == 0) return 8;
+                    if (cmp8 < 0)
                     {
-                        clonedChild.Parent = newChildArray[i];
+                        int cmp9 = buffer[9].FirstKeyByte - searchKeyByte;
+                        if (cmp9 == 0) return 9;
+                        if (cmp9 < 0) return ~9;
+                        return ~8;
+                    }
+
+                    int cmp6 = buffer[6].FirstKeyByte - searchKeyByte;
+                    if (cmp6 == 0) return 6;
+                    if (cmp6 < 0)
+                    {
+                        int cmp7 = buffer[7].FirstKeyByte - searchKeyByte;
+                        if (cmp7 == 0) return 7;
+                        if (cmp7 < 0) return ~7;
+                        return ~6;
+                    }
+                    return ~5;
+                }
+
+                int cmp2 = buffer[2].FirstKeyByte - searchKeyByte;
+                if (cmp2 == 0) return 2;
+                if (cmp2 < 0)
+                {
+                    int cmp3 = buffer[3].FirstKeyByte - searchKeyByte;
+                    if (cmp3 == 0) return 3;
+                    if (cmp3 < 0)
+                    {
+                        int cmp4 = buffer[4].FirstKeyByte - searchKeyByte;
+                        if (cmp4 == 0) return 4;
+                        if (cmp4 < 0) return ~4;
+                        return ~3;
+                    }
+                    return ~2;
+                }
+                int cmp0 = buffer[0].FirstKeyByte - searchKeyByte;
+                if (cmp0 == 0) return 0;
+                if (cmp0 < 0)
+                {
+                    int cmp1 = buffer[1].FirstKeyByte - searchKeyByte;
+                    if (cmp1 == 0) return 1;
+                    if (cmp1 < 0) return ~1;
+                    return ~0;
+                };
+
+                return -1;
+
+            case 256:
+                // If the node has every possible ordered value, no need to search
+                return searchKeyByte;
+
+            default:
+                int lo = 0;
+                int hi = childCount - 1;
+                while (lo <= hi)
+                {
+                    int i = lo + (hi - lo >> 1);
+                    int c = buffer[i].FirstKeyByte - searchKeyByte;
+                    if (c == 0) return i;
+                    if (c < 0)
+                    {
+                        lo = i + 1;
+                    }
+                    else
+                    {
+                        hi = i - 1;
+                    }
+                }
+                return ~lo;
+        }
+
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public KeyValue<T> AsKeyValue()
+    {
+        return new KeyValue<T>(Key!, KeyBytes, Value);
+    }
+
+    /// <summary>
+    /// Steps down the child nodes of this node, creating missing key segments as necessary before
+    /// setting the value on the last matching child node.
+    /// </summary>
+    /// <param name="rootNode">A reference to the root node. Necessary for one fringe concurrency case</param>
+    /// <param name="key">The full key to set the value on</param>
+    /// <param name="value">The value to set on the matching node</param>
+    public void SetValue(ref Node<T> rootNode, ReadOnlySpan<byte> key, T value)
+    {
+        ref Node<T> searchNode = ref rootNode;
+        var searchKey = key;
+        int keyOffset = 0;
+        byte[] keyBytes = null;
+
+        // Every branch of this while statement must either set a new descendant search node or return
+        while (true)
+        {
+            searchKey = key.Slice(keyOffset);
+            var searchKeyByte = searchKey[0];
+
+            int matchingIndex = searchNode.FindChildByFirstByte(searchKeyByte);
+
+            if (matchingIndex > -1)
+            {
+                ref Node<T> matchingChild = ref searchNode.childrenBuffer[matchingIndex]!;
+
+                int matchingLength = 1;
+                int childKeySegmentLength = matchingChild.KeySegment.Length;
+
+                if (childKeySegmentLength > 1)
+                {
+                    var matchingChildKeySegment = matchingChild.KeySegment;
+                    ReadOnlySpan<byte> matchingChildKey = matchingChildKeySegment.Span;
+                    matchingLength = searchKey.CommonPrefixLength(matchingChildKey);
+                }
+
+                if (matchingLength == searchKey.Length)
+                {
+                    if (matchingLength == childKeySegmentLength)
+                    {
+                        // We found a child node that matches our key exactly
+                        // E.g. Key = "apple" and child key = "apple"
+                        matchingChild.Value = value;
+                        return;
+                    }
+                    else
+                    {
+                        // We matched the whole set key, but not the entire child key. We need to split the child key
+                        SplitNode(ref matchingChild, matchingLength);
+                        matchingChild.Value = value;
+                        return;
+                    }
+
+                }
+                else // We matched part of the set key on a child
+                {
+                    if (matchingLength == childKeySegmentLength)
+                    {
+                        // and the entire child key
+                        keyOffset += matchingLength;
+                        searchNode = ref matchingChild;
+                    }
+                    else
+                    {
+                        // and only part of the child key
+                        SplitNode(ref matchingChild, matchingLength);
+                        keyOffset += matchingLength;
+                        searchNode = ref matchingChild;
                     }
                 }
             }
-
-            for(int i = 0; i < newChildArray.Length; i++)
-            {
-                var child = newChildArray[i];
-                child.ParentIndex = i;
-                child.Parent = newSelf;
-            }
-
-            newSelf.Children = newChildArray;
-
-            if (this != rootNode)
-            {
-                newSelf.Parent.Children[newSelf.ParentIndex] = newSelf;
-            }
             else
             {
-                rootNode = newSelf;
-            }
+                // There were no matching children, lets add a new one.
+                // E.g. Key = "apple" and no child that even starts with 'a'. Add a new child node
 
+                // Binary search results returns bitwise complement of the index of the first
+                // byte greater than the one we searched for (which is where we want to insert
+                // our new child).
+                int insertChildAtIndex = ~matchingIndex;
+                if (keyBytes is null) keyBytes = key.ToArray();
+                var newChild = new Node<T>();
+
+                newChild.KeySegment = keyBytes.AsMemory(keyOffset, searchKey.Length);
+                newChild.FirstKeyByte = keyBytes[keyOffset];
+                newChild.KeyBytes = keyBytes.AsMemory(0, keyOffset + searchKey.Length);
+                newChild.Key = Encoding.UTF8.GetString(newChild.KeyBytes.Span);
+                newChild.Value = value;
+                searchNode = searchNode.CloneWithNewChild(newChild, insertChildAtIndex);
+
+                return;
+            }
         }
     }
 
-    private void SplitChild(int startingCharacter, int childIndex)
+    public Node<T> Clone(bool copyChildren)
     {
-        var child = Children[childIndex];
+        var clone = new Node<T>();
+        clone.Key = Key;
+        clone.KeySegment = KeySegment;
+        clone.FirstKeyByte = FirstKeyByte;
+        clone.KeyBytes = KeyBytes;
+        clone.Value = Value;
+        if (copyChildren)
+        {
+            clone.childrenBuffer = childrenBuffer;
+        }
+        return clone;
+    }
+
+    private static readonly int[] ChildBuffersSizeLUT = GetChildBufferCapacitySizes();
+    private static int[] GetChildBufferCapacitySizes()
+    {
+        // The purpose of this lookup table is to assign child array sizes by bucketing
+        // around the assumption that many keys will map to ASCII based usage patterns.
+        int[] sizes = new int[256];
+        for (int i = 0; i < sizes.Length; i++)
+        {
+            if (i == 0)
+            {
+                sizes[i] = 0;
+            }
+            else if (i == 1)
+            {
+                sizes[i] = 1;
+            }
+            else if (i < 4)
+            {
+                sizes[i] = 4;
+            }
+            else if (i < 11) // Decimals
+            {
+                // Including a space for an
+                // arbitrary delimiter
+                sizes[i] = 10;
+            }
+            else if (i < 16) // GUID
+            {
+                // While 17 characters are possible,
+                // only 16 unique combinations can be at any
+                // given location within a string representation of
+                // a guid (as the hyphens are always at the same ordinals).
+                sizes[i] = 16;
+            }
+            else if (i < 32) // Alpha characters
+            {
+                // Enough to hold either uppercase or lowercase
+                // plus a couple delimiters, and added
+                // a few extra to round up to nearest power of 2
+                sizes[i] = 32;
+            }
+            else if (i < 65) // Base64
+            {
+                sizes[i] = 65;
+            }
+            else if (i < 95) // Printable ASCII
+            {
+                sizes[i] = 95;
+            }
+            else if (i < 128)
+            {
+                // Jump to full 128 or 256
+                // If we are using more than 95 unique byte values
+                // then there is a good chance we are storing something
+                // that is not heavily ascii based.
+                sizes[i] = 128;
+            }
+            else
+            {
+                sizes[i] = 256;
+            }
+        }
+        return sizes;
+    }
+
+    public Node<T> CloneWithNewChild(Node<T> newChild, int atIndex)
+    {
+        var clone = Clone(false);
+        clone.childrenBuffer = new Node<T>[childrenBuffer.Length + 1];
+        Children.CopyWithInsert(clone.Children, newChild, atIndex);
+        return clone;
+    }
+
+    private static void SplitNode(ref Node<T> child, int atKeyLength)
+    {
         // We are taking a child node and splitting it at a specific number of
         // characters in its key segment
 
         // E.g.
-        // We have nodes A => BC => etc...
+        // We have nodes A => BC => ...
         // and we want A => B => C => etc..
         // A is the current 'this' node of this method
         // BC is the original child node
         // B is the splitParent, and gets a null value
         // C is the new splitChild, it retains the original value and children of the 'BC' node
 
-        var splitChildKey = child.KeySegment.Substring(startingCharacter);
-        var splitChild = new Node<T>(splitChildKey) { Value = child.Value};
-        var splitChildChildren = new Node<T>[child.Children.Length];
-        for(int i = 0; i < child.Children.Length; i++)
-        {
-            var splitChildChild = child.Children[i].Clone();
-            splitChildChildren[i] = splitChildChild;
-            splitChildChild.ParentIndex = i;
-            splitChildChild.Parent = splitChild;
-        }
+        // We have to clone the child we split because we are changing its key size
+        var splitChild = child.Clone(true);
+        var newOffset = atKeyLength;
+        var newCount = splitChild.KeySegment.Length - atKeyLength;
+        splitChild.KeySegment = splitChild.KeySegment.Slice(newOffset, newCount);
+        splitChild.FirstKeyByte = splitChild.KeySegment.Span[0];
 
-        var splitParentKey = child.KeySegment.Substring(0, startingCharacter);
-        var splitParent = new Node<T>(splitParentKey) { Children = new Node<T>[] { splitChild } };
+        var splitParent = new Node<T>();
+        splitParent.childrenBuffer = [splitChild];
 
-        splitParent.Parent = this;
-        splitParent.ParentIndex = childIndex;
+        var childKeySegment = child.KeySegment;
+        splitParent.KeySegment = childKeySegment.Slice(0, atKeyLength);
+        splitParent.FirstKeyByte = childKeySegment.Span[0];
+        var childKey = child.KeyBytes;
+        splitParent.KeyBytes = childKey.Slice(0, childKey.Length - childKeySegment.Length + atKeyLength);
+        splitParent.Key = Encoding.UTF8.GetString(splitParent.KeyBytes.Span);
 
-        splitChild.Parent = splitParent;
-        splitChild.ParentIndex = 0;
-
-        // The order we perform the above operations is very important for concurrency reasons
-
-        Children[childIndex] = splitParent;
+        child = splitParent;
     }
 
-    private Node<T> Parent;
-    private int ParentIndex;
 
-    public Node<T> GetValue(in ReadOnlySpan<char> key)
+    public T Get(ReadOnlySpan<byte> key)
     {
         var searchNode = this;
-        var searchKey = key;
-        char searchFirstChar;
+        var searchKeyByte = key[0];
+        int matchingIndex = searchNode.FindChildByFirstByte(searchKeyByte);
 
-        FakeTailRecursion:
-        var searchChildren = searchNode.Children;
-        searchFirstChar = searchKey[0];
-
-        for (int i = 0; i < searchChildren.Length; i++)
+        while (matchingIndex > -1)
         {
-            Node<T> child = searchChildren[i];
-            if (searchFirstChar != child.FirstChar) continue;
+            searchNode = searchNode.childrenBuffer[matchingIndex];
 
-            var matchingBytes = searchKey.CommonPrefixLength(child.KeySegment);
-            //var matchingBytes = GetMatchingBytes(key, child.KeySegment);
+            var keySegment = searchNode.KeySegment.Span;
+            var keyLength = keySegment.Length;
+            var bytesMatched = keyLength == 1 ? 1 : key.CommonPrefixLength(keySegment);
 
-            if (matchingBytes == searchKey.Length)
+            if (bytesMatched == key.Length)
             {
-                if (matchingBytes == child.KeySegment.Length)
-                {
-                    // We found a key with an exact match
-                    return child;
-                }
-                else
-                {
-                    // We found a key that was longer than the
-                    // one we were looking for that matched the length of the key
-
-                    // In a radix tree, that means our key wasn't found, because if it
-                    // existed, it would have been split at our length
-                    return null;
-                }
+                return bytesMatched == keyLength ? searchNode.Value : default;
             }
-            else if (matchingBytes < searchKey.Length)
-            {
-                searchKey = searchKey.Slice(matchingBytes);
-                searchNode = child;
-                goto FakeTailRecursion; // C# maintainers, please add tail call optimizations
-            }
+            key = key.Slice(bytesMatched);
+            searchKeyByte = key[0];
+            matchingIndex = searchNode.FindChildByFirstByte(searchKeyByte);
         }
-        return null;
-
+        return default;
     }
 
-    /// <summary>
-    /// Creates a representation of the node and its parent key segments connected by delimiters.
-    /// Example: ROOT > A > pp > l > e
-    /// </summary>
-    public string ToGraphNodeString()
+    internal Node<T> FindPrefixMatch(ReadOnlySpan<byte> key)
     {
         var node = this;
-        Stack<Node<T>> stack = new();
-        stack.Push(node);
-        StringBuilder sb = new();
-        var parent = node.Parent;
-        while (parent != null)
+        var childIndex = node.FindChildByFirstByte(key[0]);
+        while (childIndex > -1)
         {
-            stack.Push(parent);
-            parent = parent.Parent;
+            node = node.childrenBuffer[childIndex];
+            var keySegment = node.KeySegment.Span;
+            var keyLength = keySegment.Length;
+            var matchingBytes = keyLength == 1 ? 1 : key.CommonPrefixLength(keySegment);
+
+            if (matchingBytes == key.Length) { return node; }
+
+            // We have to match the whole child key to be a match
+            if (matchingBytes != keyLength) return null;
+
+            key = key.Slice(matchingBytes);
+
+            childIndex = node.FindChildByFirstByte(key[0]);
         }
-        while(stack.TryPop(out var poppedNode))
-        {
-            if (poppedNode.KeySegment == string.Empty)
-            {
-                sb.Append("ROOT");
-            }
-            else
-            {
-                sb.Append(" > ");
-                sb.Append(poppedNode.KeySegment);
-            }
-        }
-        return sb.ToString();
-    }
-
-    public IEnumerable<TSelection> Collect<TSelection>() where TSelection : class, T
-    {
-        if (Value is not null)
-        {
-            yield return (TSelection)Value;
-        }
-        if (Children.Length == 0)
-        {
-            yield break;
-        }
-
-        // We are doing a depth first search for all the values to collect
-        // and using parent references and parent indexes (the index of the 
-        // iterator node within it's parent) to backtrack and find sibblings
-        // without having to allocate additional storage (such as using a stack)
-        var searchNode = Children[0];
-
-        // Due to the way that iterators work and the concurrency model for this
-        // graph, sometimes 'this' reference in this method is no longer in the 
-        // reference version of the radix tree. To understand when we have completed
-        // our search, we need to know when we are back at the depth we started at.
-        int depthFromRoot = 1;
-
-        while (true)
-        {
-
-            if (searchNode.Value is not null)
-            {
-                yield return (TSelection)searchNode.Value;
-            }
-            if (searchNode.Children.Length != 0)
-            {
-                // Dig depth first
-                searchNode = searchNode.Children[0];
-                depthFromRoot++;
-                continue;
-            }
-            else
-            {
-                var nextSibbling = searchNode.NextSibling;
-                if (nextSibbling is not null)
-                {
-                    searchNode = nextSibbling;
-                }
-                else
-                {
-                    while(true)
-                    {
-                        depthFromRoot--;
-                        if (depthFromRoot == 0)
-                        {
-                            yield break;
-                        }
-                        var nextParentSibbling = searchNode.Parent.NextSibling;
-                        if (nextParentSibbling is null)
-                        {
-                            searchNode = searchNode.Parent;
-                        }
-                        else
-                        {
-                            searchNode = nextParentSibbling;
-                            break;
-                        }
-                    }
-
-                }
-
-            }
-
-        }
-
-    }
-    
-    public IEnumerable<TSelection> EnumeratePrefix<TSelection>(ReadOnlySpan<char> key) where TSelection : class, T
-    {
-        if (Children.Length == 0) return Array.Empty<TSelection>();
-        var searchRoot = this;
-
-        TailRecursionWhen:
-
-        foreach(var child in searchRoot.Children)
-        {
-            if (key[0] != child.FirstChar) continue;
-
-            var matchingCharacters = key.CommonPrefixLength(child.KeySegment);
-
-            if (matchingCharacters == key.Length)
-            {
-                // We found a key that matched the entire prefix search
-                return child.Collect<TSelection>();
-
-            }
-            else
-            {
-
-                if (matchingCharacters == child.KeySegment.Length)
-                {
-                    // We matched the whole child key, check the remainder of
-                    // the prefix search against that child's children
-                    key = key.Slice(matchingCharacters);
-                    searchRoot = child;
-
-                    // This could probably be rewritten as a while loop,
-                    // but this feels like a good standin for what I'd actually
-                    // like to do if C# supported tail recursion
-                    goto TailRecursionWhen; 
-                }
-
-                // We partial matched, but the remainder is a mismatch
-                return Array.Empty<TSelection>();
-
-            }
-        }
-
-        return Array.Empty<TSelection>();
-    }
-
-    public int GetChildrenCount()
-    {
-        return GetChildrenCountInternal(0);
-    }
-
-    public int CountValues(int runningCount = 0)
-    {
-        if (Value != null) runningCount++;
-        var children = Children;
-        for (int i = 0; i < children.Length; i++)
-        {
-            Node<T> child = children[i];
-            runningCount = child.CountValues(runningCount);
-        }
-        return runningCount;
-    }
-
-    private int GetChildrenCountInternal(int runningCount)
-    {
-        var children = Children;
-        for (var index = 0; index < children.Length; index++)
-        {
-            var child = children[index];
-            runningCount++;
-            runningCount = child.GetChildrenCountInternal(runningCount);
-        }
-
-        return runningCount;
+        return null;
     }
 
     public int GetValuesCount()
     {
-        return GetValuesCountInternal(0);
+        int runningCount = 0;
+        GetValuesCountInternal(ref runningCount);
+        return runningCount;
     }
 
-    private int GetValuesCountInternal(int runningCount)
+    private void GetValuesCountInternal(ref int runningCount)
     {
-        foreach (var child in Children)
+        if (Value is not null) runningCount++;
+        foreach (var child in childrenBuffer)
         {
-            if (child.Value != null)
-            {
-                runningCount++;
-            }
-            runningCount = child.GetChildrenCountInternal(runningCount);
+            child.GetValuesCountInternal(ref runningCount);
         }
-        return runningCount;
     }
 
     public override string ToString()
     {
-        return ToGraphNodeString();
+        return Key!;
     }
+
+    internal void Reset()
+    {
+        KeyBytes = default;
+        Value = default;
+        childrenBuffer = EmptyNodes;
+        KeySegment = EmptyBytes;
+    }
+
+
 }
