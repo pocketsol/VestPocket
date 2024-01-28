@@ -242,9 +242,8 @@ public class VestPocketStore : IDisposable
     /// Saves an entity to the store.
     /// </summary>
     /// <param name="entity">The entity to save to the store</param>
-    /// <returns>The entity that was saved in the store with an updated version</returns>
     /// <exception>ConcurrencyException</exception>
-    public async Task<Kvp> Save(Kvp entity)
+    public async Task Save(Kvp entity)
     {
         EnsureWriteAccess();
         var transaction = new SingleTransaction(entity, true);
@@ -252,7 +251,11 @@ public class VestPocketStore : IDisposable
         transactionQueue.Enqueue(transaction);
         await transaction.Task.ConfigureAwait(false);
         ArrayPool<byte>.Shared.Return(transaction.Utf8JsonPayload.Array);
-        return transaction.Entity;
+    }
+
+    public Task Save<T>(string key, T value)
+    {
+        return Save(new Kvp(key, value));
     }
 
 

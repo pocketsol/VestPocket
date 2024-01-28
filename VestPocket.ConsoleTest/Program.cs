@@ -106,11 +106,11 @@ class Program
             entity = connection.Get<Entity>(key);
             entity = connection.Get<Entity>(key);
 
-            record = await connection.Save(record);
+            await connection.Save(record);
             entity = connection.Get<Entity>(key);
             entity = connection.Get<Entity>(key);
 
-            record = await connection.Save(record);
+            await connection.Save(record);
             entity = connection.Get<Entity>(key);
             entity = connection.Get<Entity>(key);
 

@@ -9,6 +9,7 @@ public class VestPocketBenchmarks
     public int N = 999_999;
     private VestPocketStore store;
     private string testKey = "123456";
+    private Kvp stringEntity = new Kvp("key", "value");
     private Kvp testDocument;
 
     private Kvp[] entities1000 = new Kvp[1000];
@@ -40,7 +41,8 @@ public class VestPocketBenchmarks
         Task[] setResults = new Task[N];
         for (int i = 0; i < N; i++)
         {
-            setResults[i] = store.Save(new Kvp(i.ToString(), new Entity($"Test Body {i}")));
+            var kvp = new Kvp(i.ToString(), new Entity($"Test Body {i}"));
+            setResults[i] = store.Save(kvp);
         }
         Task.WaitAll(setResults);
         testDocument = new Kvp(testKey, store.Get<Entity>(testKey));
@@ -65,9 +67,15 @@ public class VestPocketBenchmarks
     }
 
     [Benchmark]
-    public async Task<Kvp> Save()
+    public async Task Save()
     {
-        return await store.Save(testDocument);
+        await store.Save(testDocument);
+    }
+
+    [Benchmark]
+    public async Task SaveString()
+    {
+        await store.Save(stringEntity);
     }
 
     [Benchmark]

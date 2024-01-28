@@ -104,8 +104,6 @@ public class VestPocketOptions
         }
     }
 
-    static internal readonly byte[] StringNameUtf8 = "string"u8.ToArray();
-
     private bool frozen = false;
     internal void Freeze()
     {
@@ -116,6 +114,7 @@ public class VestPocketOptions
         var typesByType = storageTypes.Select(x => new KeyValuePair<Type, StorageType>(x.Type, x));
         DeserializationTypes = typesByName.ToFrozenDictionary();
         SerializationTypes = typesByType.ToFrozenDictionary();
+        storageTypes = null;
     }
 
     /// <summary>

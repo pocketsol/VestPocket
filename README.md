@@ -5,20 +5,21 @@
 
 # What is Vest Pocket
 
-Vest Pocket is a single-file persisted lookup contained in a pure .NET 7.0+ library. All records persisted are kept in-memory for fast retrieval. This project is not a replacement for a networked database or a distributed cache. It is meant to be a sidecar to each instance of your application.
+Vest Pocket is a single-file persisted lookup contained in a pure .NET 8.0+ library. All records persisted are kept in-memory for fast retrieval.
+This project is not a replacement for a networked database or a distributed cache. It is meant to be a sidecar to each instance of your application.
 
 > NOTE: Vest Pocket is currently an alpha library. The API may change drastically before the first release.
 
 # Use Cases
 
 - Version and deploy data that should evovle with your application which may also need to be updated at runtime
-- Caching data locally to a single application instance
+- Caching data locally to a single application instance, especially for handling autocomplete / prefix searches
 - As a light database for proof-of-concept and learning projects
 - In any place you would use a single file database, but want to trade features and RAM usage for better performance
 
 # Setup
 
-After installing the nuget package, some code needs to be added to the project before Vest Pocket can be used. They can be added in any file, it is recommended to have a session in your application just for that.
+After installing the nuget package, initialize a VestPocketOptions instance.
 
 ```csharp
     [JsonDerivedType(typeof(Entity), nameof(Entity))]
@@ -34,21 +35,6 @@ After installing the nuget package, some code needs to be added to the project b
 
 Vest Pocket takes advantage of System.Text.Json source generated serialization. These lines of code setup a base entity type for storing in Vest Pocket as well as configuring it for source generated serialization. This is standard System.Text.Json configuration. More information about this topic can be found in the [System.Text.Json .NET 7.0 announcement](https://devblogs.microsoft.com/dotnet/system-text-json-in-dotnet-7/#polymorphism-using-contract-customization).
 
-# Adding an Entity
-
-```csharp
-    public record Customer(string Key, int Version, bool Deleted, string Name) : Entity(Key, Version, Deleted);
-```
-First, add a record type that inherits from the base entity type.
-
-```csharp
-    [JsonDerivedType(typeof(Entity), nameof(Entity))]
-    [JsonDerivedType(typeof(Customer), nameof(Customer))] // <<----------Add This Line
-    public record class Entity(string Key, int Version, bool Deleted) : IEntity
-    {
-        public IEntity WithVersion(int version) { return this with { Version = version }; }
-    }
-```
 
 Then add a JsonDerivedType attribute to the base entity for the new entity type. This is necessary for System.Text.Json to create source generated serialization and deserialization logic.
 
@@ -57,8 +43,19 @@ Then add a JsonDerivedType attribute to the base entity for the new entity type.
 ## Opening a Store
 
 ```csharp
-    var options = new VestPocketOptions { FilePath = "test.db" };
-    var store = new VestPocketStore<Entity>(VestPocketJsonContext.Default.Entity, options);
+
+    var vestPocketOptions = new VestPocketOptions
+    {
+        CompressOnRewrite = true,
+        Durability = VestPocketDurability.FlushOnDelay,
+        FilePath = "store.db",
+        JsonSerializerContext = SourceGenerationContext.Default,
+        ReadOnly = false,
+        Name = null,
+        RewriteRatio = 1.0,
+        RewriteMinimum = 10_000
+    };
+    var store = new VestPocketStore(vestPocketOptions);
     await store.OpenAsync(CancellationToken.None);
 ```
  

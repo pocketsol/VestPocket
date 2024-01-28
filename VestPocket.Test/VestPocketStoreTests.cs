@@ -29,10 +29,10 @@ public class VestPocketStoreTests : IClassFixture<VestPocketStoreFixture>
     {
         var key = "crud";
         var entity = new Kvp(key, new TestDocument ("crud body"));
-        var entitySaved = await testStore.Save(entity);
+        await testStore.Save(entity);
 
         var entityRetreived = testStore.Get<TestDocument>(key);
-        Assert.Equal(entitySaved.Value, entityRetreived);
+        Assert.Equal(entity.Value, entityRetreived);
 
         var entityToUpdate = new Kvp(key, entityRetreived with {Body = "crud body updated"});
         var entityUpdated = await testStore.Swap(entityToUpdate, entityRetreived);
@@ -85,7 +85,8 @@ public class VestPocketStoreTests : IClassFixture<VestPocketStoreFixture>
         string key = "prefix";
         string prefix = "pre";
         string body = "body";
-        var expectedDocument = await testStore.Save(new Kvp(key, new TestDocument(body)));
+        var expectedDocument = new Kvp(key, new TestDocument(body));
+        await testStore.Save(expectedDocument);
         var prefixResults = testStore.GetByPrefix(prefix);
         var firstMatchByPrefix = prefixResults.FirstOrDefault();
         Assert.Equal(expectedDocument.Value, firstMatchByPrefix.Value);
@@ -97,8 +98,8 @@ public class VestPocketStoreTests : IClassFixture<VestPocketStoreFixture>
         string key = "prefix";
         string prefix = "prefix";
         string body = "body";
-
-        var expectedDocument = await testStore.Save(new Kvp(key, new TestDocument(body)));
+        var expectedDocument = new Kvp(key, new TestDocument(body));
+        await testStore.Save(expectedDocument);
         var prefixResults = testStore.GetByPrefix(prefix);
         var firstMatchByPrefix = prefixResults.FirstOrDefault();
         Assert.Equal(expectedDocument.Value, firstMatchByPrefix.Value);
@@ -132,7 +133,7 @@ public class VestPocketStoreTests : IClassFixture<VestPocketStoreFixture>
         await testStore.Save(record1);
 
         var record2 = new Kvp(key, doc2);
-        var expectedDocument = await testStore.Save(record2);
+        await testStore.Save(record2);
 
         var record3 = new Kvp(key, doc3);
         var finalStoreDocument = await testStore.Swap(record3, doc1);
@@ -187,6 +188,24 @@ public class VestPocketStoreTests : IClassFixture<VestPocketStoreFixture>
         backupMem.Position = 0;
         var asUtf8 = System.Text.Encoding.UTF8.GetString(backupMem.ToArray());
         Assert.True(memNotEmpty);
+    }
+
+    [Fact]
+    public async Task Save_StringValue()
+    {
+        var expected = "SomeValue";
+        var key = "SomeKey";
+        await testStore.Save(new Kvp(key, expected));
+        var actual = testStore.Get<string>(key);
+        Assert.Equal(expected, actual);
+    }
+
+    //[Fact]
+    public async Task Save_UnregisteredTypeFails()
+    {
+        var unregisteredTypeDocument = new UnregisteredTypeDocument("SomeName", 5);
+        var keyValuePair = new Kvp("SomeKey", unregisteredTypeDocument);
+        await testStore.Save(keyValuePair);
     }
 
     [Fact]

@@ -2,8 +2,6 @@
 using System.Text;
 using System.Text.Json;
 using System.IO;
-using System.Text.Json.Serialization;
-using System.Collections.Frozen;
 
 namespace VestPocket
 {
@@ -18,10 +16,8 @@ namespace VestPocket
         ArrayBufferWriter<byte> outputBuffer;
         ArrayBufferWriter<byte> entityBuffer;
         Utf8JsonWriter entityWriter;
+        private VestPocketOptions options;
         private JsonReaderOptions jsonReaderOptions = new();
-        private readonly JsonSerializerContext jsonSerializerContext;
-        private readonly FrozenDictionary<string, StorageType> deserializerionType;
-        private FrozenDictionary<Type, StorageType> serializationTypes;
         private const byte LF = 10;
         private const byte OpenObject = 123;
         private const byte CloseObject = 125;
@@ -113,9 +109,7 @@ namespace VestPocket
             this.outputBuffer = outputBuffer;
             this.entityBuffer = entityBuffer;
             this.entityWriter = entityWriter;
-            this.jsonSerializerContext = vestPocketOptions.JsonSerializerContext;
-            this.deserializerionType = vestPocketOptions.DeserializationTypes;
-            this.serializationTypes = vestPocketOptions.SerializationTypes;
+            this.options = vestPocketOptions;
         }
 
         /// <summary>
@@ -142,18 +136,37 @@ namespace VestPocket
                     {
                         reader.Read();
                         string storageTypeName = reader.GetString();
-                        deserializerionType.TryGetValue(storageTypeName, out storageType);
+                        if (!options.DeserializationTypes.TryGetValue(storageTypeName, out storageType))
+                        {
+                            throw new Exception("Unknown deserialization type");
+                        }
                     }
                     else if (reader.ValueTextEquals(ValPropertyName))
                     {
                         reader.Read();
                         if (storageType is not null)
                         {
-                            entity = JsonSerializer.Deserialize(ref reader, storageType.JsonTypeInfo);
+                            if (storageType.JsonTypeInfo is null)
+                            {
+                                entity = JsonSerializer.Deserialize(ref reader, storageType.Type, options.JsonSerializerContext);
+                            }
+                            else
+                            {
+                                entity = JsonSerializer.Deserialize(ref reader, storageType.JsonTypeInfo);
+                            }
                         }
                         else
                         {
-                            entity = reader.GetString();
+                            // Implicit types
+                            entity = reader.TokenType switch { 
+                                JsonTokenType.Null => null,
+                                JsonTokenType.String => reader.GetString(),
+                                JsonTokenType.Number => reader.GetDouble(),
+                                JsonTokenType.True => true,
+                                JsonTokenType.False => false,
+                                _ => throw new Exception(
+                                    $"A $type property was not found and the Json TokenType is not one that VestPocket understands implicitly: {reader.TokenType}"), 
+                            };
                         }
                     }
                 }
@@ -180,13 +193,11 @@ namespace VestPocket
             StorageType serializationType = null;
             if (entity is not null)
             {
-                this.serializationTypes.TryGetValue(entity.GetType(), out serializationType);
+                options.SerializationTypes.TryGetValue(entity.GetType(), out serializationType);
             }
-            byte[] utf8TypeName;
 
             if (serializationType is null)
             {
-                utf8TypeName = VestPocketOptions.StringNameUtf8;
                 if (entity is null)
                 {
                     entityWriter.WriteNullValue();
@@ -195,14 +206,22 @@ namespace VestPocket
                 {
                     entityWriter.WriteStringValue(entityString.ToString());
                 }
+                else if (entity is double entityDouble)
+                {
+                    entityWriter.WriteNumberValue(entityDouble);
+                } 
+                else if (entity is bool entityBool)
+                {
+                    entityWriter.WriteBooleanValue(entityBool);
+                }
                 else
                 {
-                    entityWriter.WriteStringValue(entity.ToString());
+                    // This isn't a compile time known type 
+                    throw new Exception("Unknown serialization type");
                 }
             }
             else
             {
-                utf8TypeName = serializationType.Utf8TypeName;
                 JsonSerializer.Serialize(entityWriter, entity, serializationType.JsonTypeInfo);
             }
 
@@ -211,7 +230,9 @@ namespace VestPocket
             Span<byte> keyBytes = stackalloc byte[key.Length * 4];
             keyBytes = keyBytes.Slice(0, Encoding.UTF8.GetBytes(key, keyBytes));
 
-            var recordLength = FixedOverheadLength + keyBytes.Length + utf8TypeName.Length + entityLength;
+            int typeNameLength = serializationType is null ? 0 : serializationType.Utf8TypeName.Length;
+
+            var recordLength = FixedOverheadLength + keyBytes.Length + typeNameLength + entityLength;
 
             // Make room in the record buffer to copy the serialized entity JSON and a linefeed
             var recordSpan = outputBuffer.GetMemory(recordLength).Span;
@@ -228,15 +249,18 @@ namespace VestPocket
             index += keyBytes.Length;
             recordSpan[index++] = DoubleQuote;
 
-            recordSpan[index++] = Comma;
+            if (serializationType is not null)
+            {
+                recordSpan[index++] = Comma;
 
-            TypeProperty.CopyTo(recordSpan.Slice(index, TypeProperty.Length));
-            index += TypeProperty.Length;
+                TypeProperty.CopyTo(recordSpan.Slice(index, TypeProperty.Length));
+                index += TypeProperty.Length;
 
-            recordSpan[index++] = DoubleQuote;
-            utf8TypeName.CopyTo(recordSpan.Slice(index, utf8TypeName.Length));
-            index += utf8TypeName.Length;
-            recordSpan[index++] = DoubleQuote;
+                recordSpan[index++] = DoubleQuote;
+                serializationType.Utf8TypeName.CopyTo(recordSpan.Slice(index, serializationType.Utf8TypeName.Length));
+                index += serializationType.Utf8TypeName.Length;
+                recordSpan[index++] = DoubleQuote;
+            }
 
             recordSpan[index++] = Comma;
 
