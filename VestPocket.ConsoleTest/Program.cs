@@ -15,8 +15,8 @@ class Program
     static async Task Main(string[] args)
     {
 
-        int threads = 8;
-        int iterations = 10000;
+        int threads = 100;
+        int iterations = 1000;
 
         Console.WriteLine("---------Running VestPocket---------");
 
@@ -29,6 +29,7 @@ class Program
         RemoveDatabaseFile(options);
         connection = new VestPocketStore(options);
         await connection.OpenAsync(CancellationToken.None);
+        var kvp = new Kvp("test", "test");
 
         await TimeIterations("Create Entities", (thread, i) =>
         {

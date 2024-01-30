@@ -10,12 +10,26 @@ namespace VestPocket
     /// to a file or stream. This uses Utf8JsonWriter together with source generated 
     /// System.Text.Json.JsonSerializer (for the user defined object serialization0.
     /// </summary>
-    public ref struct RecordSerializer
+    public class RecordSerializer
     {
 
-        ArrayBufferWriter<byte> outputBuffer;
-        ArrayBufferWriter<byte> entityBuffer;
-        Utf8JsonWriter entityWriter;
+        private static readonly JsonWriterOptions jsonWriterOptions = new JsonWriterOptions()
+        {
+            Indented = false,
+            SkipValidation = true
+        };
+
+        public RecordSerializer(VestPocketOptions vestPocketOptions)
+        {
+            this.outputBuffer = new ArrayBufferWriter<byte>(8);
+            this.entityBuffer = new ArrayBufferWriter<byte>(8);
+            entityWriter = new(entityBuffer, jsonWriterOptions);
+            this.options = vestPocketOptions;
+        }
+
+        private readonly ArrayBufferWriter<byte> outputBuffer;
+        private readonly ArrayBufferWriter<byte> entityBuffer;
+        private readonly Utf8JsonWriter entityWriter;
         private VestPocketOptions options;
         private JsonReaderOptions jsonReaderOptions = new();
         private const byte LF = 10;
@@ -50,9 +64,17 @@ namespace VestPocket
             if (resetBuffer) Reset();
         }
 
+        public ReadOnlySpan<byte> WrittenSpan => outputBuffer.WrittenSpan;
+
         /// <summary>
         /// Clears the buffered JSON that has been written so far
         /// </summary>
+        public void Reset(VestPocketOptions options)
+        {
+            Reset();
+            this.options = options;
+        }
+
         public void Reset()
         {
             outputBuffer.ResetWrittenCount();
@@ -61,28 +83,17 @@ namespace VestPocket
             written = 0;
         }
 
-        /// <summary>
-        /// Flushes the written records and returns the UTF8 bytes in a pooled array wrapped in an ArraySegment.
-        /// </summary>
-        public ArraySegment<byte> RentWrittenBuffer()
-        {
-            var writtenSpan = outputBuffer.WrittenSpan;
-            int writtenLength = writtenSpan.Length;
-            var pooledArray = ArrayPool<byte>.Shared.Rent(writtenLength);
-            writtenSpan.CopyTo(pooledArray);
-            return new ArraySegment<byte>(pooledArray, 0, writtenLength);
-        }
-
-        /// <summary>
-        /// Returns the array backing the ArraySegment back to the shared array pool
-        /// </summary>
-        public void ReturnWrittenBuffer(ArraySegment<byte> buffer)
-        {
-            if (buffer.Array.Length > 0)
-            {
-                ArrayPool<byte>.Shared.Return(buffer.Array);
-            }
-        }
+        ///// <summary>
+        ///// Flushes the written records and returns the UTF8 bytes in a pooled array wrapped in an ArraySegment.
+        ///// </summary>
+        //public ArraySegment<byte> RentWrittenBuffer()
+        //{
+        //    var writtenSpan = outputBuffer.WrittenSpan;
+        //    int writtenLength = writtenSpan.Length;
+        //    var pooledArray = ArrayPool<byte>.Shared.Rent(writtenLength);
+        //    writtenSpan.CopyTo(pooledArray);
+        //    return new ArraySegment<byte>(pooledArray, 0, writtenLength);
+        //}
 
         static RecordSerializer()
         {
@@ -97,19 +108,6 @@ namespace VestPocket
                 2 + // Type Double Quotes
                 1 + // CloseObject
                 1; // LF
-        }
-
-
-        internal RecordSerializer(
-            ArrayBufferWriter<byte> outputBuffer, 
-            ArrayBufferWriter<byte> entityBuffer, 
-            Utf8JsonWriter entityWriter,
-            VestPocketOptions vestPocketOptions)
-        {
-            this.outputBuffer = outputBuffer;
-            this.entityBuffer = entityBuffer;
-            this.entityWriter = entityWriter;
-            this.options = vestPocketOptions;
         }
 
         /// <summary>
@@ -276,7 +274,5 @@ namespace VestPocket
             outputBuffer.Advance(recordLength);
             written += recordLength;
         }
-
-
     }
 }

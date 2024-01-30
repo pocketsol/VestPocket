@@ -37,7 +37,7 @@ internal class TransactionQueue
             throw new InvalidOperationException("Already processing transactions");
         }
         this.processQueuesCancellationTokenSource = new CancellationTokenSource();
-        this.processQueuesTask = Task.Run(ProcessQueue);
+        this.processQueuesTask = Task.Run(async() => await ProcessQueue());
         return Task.CompletedTask;
     }
 
@@ -48,7 +48,8 @@ internal class TransactionQueue
         await processQueuesTask;
     }
 
-    private async Task ProcessQueue()
+    [AsyncMethodBuilder(typeof(PoolingAsyncValueTaskMethodBuilder))]
+    private async ValueTask ProcessQueue()
     {
 
         var cancellationToken = processQueuesCancellationTokenSource.Token;
@@ -56,9 +57,9 @@ internal class TransactionQueue
         Stopwatch sw = new();
         try
         {
-            while (!cancellationToken.IsCancellationRequested )
+            while (!cancellationToken.IsCancellationRequested)
             {
-                Transaction transaction = await queueItemChannel.Reader.ReadAsync(cancellationToken);
+                var transaction = await queueItemChannel.Reader.ReadAsync(cancellationToken);
 
                 if (transactionStore.RewriteReadyToComplete)
                 {

@@ -1,9 +1,26 @@
 ﻿namespace VestPocket
 {
-    internal sealed class NoOpTransaction : Transaction
+    internal sealed class NoOpTransaction : Transaction, IDisposable
     {
 
-        public NoOpTransaction():base(false)
+        private static ObjectPool<NoOpTransaction> pool = new ObjectPool<NoOpTransaction>(
+            () => new NoOpTransaction(), 100
+        );
+
+        public static NoOpTransaction Create() => pool.Get();
+
+        public void Reset()
+        {
+            this.valueCompletionSource.Reset();
+            this.valueTaskGenerated = false;
+        }
+
+        public void Dispose()
+        {
+            pool.Return(this);
+        }
+
+        private NoOpTransaction():base()
         {
 
         }

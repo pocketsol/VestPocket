@@ -24,7 +24,6 @@ internal class TransactionLog : IDisposable
     private readonly EntityStore memoryStore;
     private readonly JsonSerializerContext jsonSerializerContext;
     private readonly VestPocketOptions options;
-    private readonly RecordSerializerFactory recordSerializerFactory;
     private int unflushed = 0;
     private readonly object rewriteLock = new();
     private Task rewriteTask;
@@ -42,6 +41,8 @@ internal class TransactionLog : IDisposable
     private bool hasFlushableOutput;
     private bool flushIntermediateFileBuffers;
 
+    private RecordSerializer recordSerializer;
+
     public bool RewriteReadyToComplete { get => rewriteReadyToComplete; }
 
     public TransactionLog(
@@ -50,8 +51,7 @@ internal class TransactionLog : IDisposable
         Func<Stream> rewriteStreamFactory,
         Func<Stream, Stream, Stream> swapRewriteStreamCallback,
         EntityStore memoryStore,
-        VestPocketOptions options,
-        RecordSerializerFactory recordSerializer
+        VestPocketOptions options
         )
     {
         this.store = store;
@@ -62,10 +62,10 @@ internal class TransactionLog : IDisposable
         this.memoryStore = memoryStore;
         this.jsonSerializerContext = options.JsonSerializerContext;
         this.options = options;
-        this.recordSerializerFactory = recordSerializer;
         this.hasFlushableOutput = fileOutputStream != null;
         this.flushIntermediateFileBuffers = hasFlushableOutput && 
             options.Durability != VestPocketDurability.FileSystemCache;
+        this.recordSerializer = new(options);
     }
 
     private void Rewrite(bool isBackup)
@@ -103,19 +103,19 @@ internal class TransactionLog : IDisposable
 
         if (!options.CompressOnRewrite)
         {
-            var serializer = recordSerializerFactory.Create();
+            recordSerializer.Reset();
 
             foreach (var item in memoryStore.Lookup.Search(ReadOnlySpan<byte>.Empty))
             {
-                serializer.Serialize(item.Key, item.Value);
-                if (serializer.Written > 16_384)
+                recordSerializer.Serialize(item.Key, item.Value);
+                if (recordSerializer.Written > 16_384)
                 {
                     if (isDisposing) return;
-                    serializer.WriteToStream(stream);
+                    recordSerializer.WriteToStream(stream);
                 }
                 itemsRewritten++;
             }
-            serializer.WriteToStream(stream);
+            recordSerializer.WriteToStream(stream);
         }
 
         stream.Flush();
@@ -306,9 +306,10 @@ internal class TransactionLog : IDisposable
 
     private Kvp DeserializeRecordFromBuffer(byte[] buffer, int length)
     {
-        var serializer = recordSerializerFactory.Create();
+        // TODO: this isn't a ref struct anymore, doesn't need to be retreived every method call
+        // (which is what we were doing because caller was async method).
         var sequence = new ReadOnlySequence<byte>(buffer, 0, length);
-        return serializer.Deserialize(sequence);
+        return recordSerializer.Deserialize(sequence);
     }
 
     public void Dispose()

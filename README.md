@@ -168,64 +168,63 @@ A Vest Pocket store can be backed up by calling the CreateBackup method. While a
 ```console
 // * Summary *
 
-BenchmarkDotNet v0.13.7, Windows 10 (10.0.19044.2728/21H2/November2021Update)
+BenchmarkDotNet v0.13.8, Windows 10 (10.0.19045.3803/22H2/2022Update)
 AMD Ryzen 7 5700G with Radeon Graphics, 1 CPU, 16 logical and 8 physical cores
-.NET SDK 8.0.100-preview.6.23330.14
-  [Host]     : .NET 7.0.1 (7.0.122.56804), X64 RyuJIT AVX2
-  Job-AXMTRY : .NET 7.0.1 (7.0.122.56804), X64 RyuJIT AVX2
+.NET SDK 8.0.100
+  [Host]     : .NET 8.0.0 (8.0.23.53103), X64 RyuJIT AVX2
+  Job-NWVYYZ : .NET 8.0.0 (8.0.23.53103), X64 RyuJIT AVX2
 
 MaxRelativeError=0.05
 
-|               Method |        Mean |      Error |     StdDev |   Gen0 |   Gen1 | Allocated |
-|--------------------- |------------:|-----------:|-----------:|-------:|-------:|----------:|
-|             GetByKey |    48.14 ns |   0.331 ns |   0.294 ns |      - |      - |         - |
-|               SetKey | 3,348.92 ns |  17.349 ns |  13.545 ns | 0.1221 | 0.0038 |    1071 B |
-| SetTenPerTransaction | 8,210.59 ns | 410.495 ns | 838.533 ns | 0.2747 |      - |    2317 B |
-|          GetByPrefix |   904.01 ns |   7.648 ns |   6.780 ns | 0.0067 |      - |      56 B |
+| Method      | Mean        | Error     | StdDev   | Allocated |
+|------------ |------------:|----------:|---------:|----------:|
+| GetByKey    |    30.29 ns |  0.221 ns | 0.196 ns |         - |
+| Save        | 2,730.84 ns | 11.552 ns | 9.647 ns |         - |
+| SaveBatch   |   226.34 ns |  7.655 ns | 7.160 ns |         - |
+| GetByPrefix |   673.93 ns |  7.239 ns | 6.772 ns |         - |
 
 ```
 Before running the benchmark above, 999,999 entities are stored by key.
 
 * GetByKey - Retreives a single entity by key
-* SetKey - Updates an entity by key
-* SetTenPerTransaction - Updates 10 entity values by passing them as an array to save
-* GetKeyPrefix - Performs a prefix search to retreive a small number of elements
+* Save - Updates an entity by key
+* SaveBatch - Updates a larger batch of entities by passing them as an array to save (time is given per entitiy)
+* GetByPrefix - Performs a prefix search to retreive a small number of elements
 
 ## *Sample output from running VestPocket.ConsoleTest*
 ```console
 ---------Running VestPocket---------
 
 --Create Entities (threads:100, iterations:1000), ops/iteration:1000--
-Throughput 87545927/s
-Latency Median: 0.167800 Max:0.228166
+Throughput 154932085/s
+Latency Median: 0.092400 Max:0.126751
 
 --Save Entities (threads:100, iterations:1000), ops/iteration:1--
-Throughput 582225/s
-Latency Median: 0.157700 Max:0.171643
+Throughput 1456673/s
+Latency Median: 0.092500 Max:0.068584
 
 --Read Entities (threads:100, iterations:1000), ops/iteration:1000--
-Throughput 87207429/s
-Latency Median: 0.161500 Max:0.303443
+Throughput 102212157/s
+Latency Median: 0.143900 Max:0.223523
 
 --Save Entities Batched (threads:100, iterations:1), ops/iteration:1000--
-Throughput 946897/s
-Latency Median: 100.464300 Max:105.435100
+Throughput 3548641/s
+Latency Median: 26.710000 Max:27.858400
 
 --Prefix Search (threads:100, iterations:1000), ops/iteration:1--
-Throughput 9532071/s
-Latency Median: 0.000400 Max:0.007377
+Throughput 5700019/s
+Latency Median: 0.002400 Max:0.003881
 
 --Read and Write Mix (threads:100, iterations:1000), ops/iteration:10--
-Throughput 2366153/s
-Latency Median: 0.562700 Max:0.422535
+Throughput 5904275/s
+Latency Median: 0.165800 Max:0.169268
 
 -----Transaction Metrics-------------
 Transaction Count: 401000
-Flush Count: 5
-Validation Time: 1.7us
-Serialization Time: 1.3us
-Serialized Bytes: 48034394
-Queue Length: 66833
+Flush Count: 8
+Validation Time: 72056.4us
+Serialized Bytes: 38034093
+Queue Length: 50125
 ```
 
 BenchmarkDotNet tests are great for testing the timing and overhead of individual operations, but are less useful for showing the impact of a library or system when under load from many asynchronous requests at a time. VestPocket.ConsoleTest contains a rudementary test that attempts to measure the requests per second of various VestPocket methods. The 'Read and Write Mix' performs two save operations and gets four values by key.

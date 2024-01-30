@@ -6,20 +6,30 @@ namespace VestPocket.Benchmark;
 public class VestPocketBenchmarks
 {
 
-    public int N = 999_999;
+    /// <summary>
+    /// Number of entities to put into the store before running tests
+    /// </summary>
+    public int EntityCount = 999_999;
+
+    /// <summary>
+    /// Number of iterations to run per method execution of methods that
+    /// take advantage of ThreadLocal and ValueTask source caching, so that
+    /// the amortized allocations can be shown instead of the per thread cost.
+    /// </summary>
+    public const int N = 10_000;
+
     private VestPocketStore store;
     private string testKey = "123456";
-    private Kvp stringEntity = new Kvp("key", "value");
     private Kvp testDocument;
-
-    private Kvp[] entities1000 = new Kvp[1000];
+    private const int BatchSize = 10_000;
+    private Kvp[] batchEntities = new Kvp[BatchSize];
 
     public VestPocketBenchmarks()
     {
-        SetupConnection();
     }
 
-    private void SetupConnection()
+    [GlobalSetup]
+    public async Task SetupConnection()
     {
         var dbFile = VestPocketOptions.Default.FilePath;
 
@@ -36,21 +46,20 @@ public class VestPocketBenchmarks
         options.Durability = VestPocketDurability.FileSystemCache;
         
         store = new VestPocketStore(options);
-        store.OpenAsync(CancellationToken.None).Wait();
+        await store.OpenAsync(CancellationToken.None);
 
-        Task[] setResults = new Task[N];
-        for (int i = 0; i < N; i++)
+        var entities = new Kvp[EntityCount];
+        for (int i = 0; i < EntityCount; i++)
         {
-            var kvp = new Kvp(i.ToString(), new Entity($"Test Body {i}"));
-            setResults[i] = store.Save(kvp);
+            entities[i] = new Kvp(i.ToString(), new Entity($"Test Body {i}"));
         }
-        Task.WaitAll(setResults);
+
+        await store.Save(entities);
         testDocument = new Kvp(testKey, store.Get<Entity>(testKey));
 
-        for (int i = 0; i < entities1000.Length; i++)
+        for (int i = 0; i < batchEntities.Length; i++)
         {
-            string key = i.ToString();
-            entities1000[i] = new Kvp(key, store.Get<Entity>(key));
+            batchEntities[i] = entities[i];
         }
     }
 
@@ -60,40 +69,31 @@ public class VestPocketBenchmarks
         return store.Get<Entity>(testKey);
     }
 
-    [Benchmark]
-    public Kvp GetByKeyUntyped()
+    [Benchmark(OperationsPerInvoke = N)]
+    public async ValueTask Save()
     {
-        return store.Get(testKey);
+        for(int i = 0; i < N; i++)
+        {
+            await store.Save(testDocument);
+        }
     }
 
-    [Benchmark]
-    public async Task Save()
+    //[Benchmark(OperationsPerInvoke = BatchSize)]
+    public async Task SaveBatch()
     {
-        await store.Save(testDocument);
+        await store.Save(batchEntities);
     }
-
-    [Benchmark]
-    public async Task SaveString()
-    {
-        await store.Save(stringEntity);
-    }
-
-    [Benchmark]
-    public async Task Save1000()
-    {
-        await store.Save(entities1000);
-    }
-
 
     [Benchmark]
     public object GetByPrefix()
     {
-        object entity = null;
-        foreach (var result in store.GetByPrefix("1234"))
+        KeyValue<object> result = default;
+        foreach (var kvp in store.GetByPrefix("1234"))
         {
-            entity = result.Value;
+            result = kvp;
         }
-        return entity;
+        return result.Value;
+
     }
 
 

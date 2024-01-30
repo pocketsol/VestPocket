@@ -1,16 +1,26 @@
 ﻿namespace VestPocket;
 
-internal class UpdateTransaction: Transaction
+internal class UpdateTransaction : Transaction, IDisposable
 {
+    private static ObjectPool<UpdateTransaction> pool = new ObjectPool<UpdateTransaction>(
+        () => new UpdateTransaction(), 1000
+    );
+
     private Kvp entity;
-    private readonly object basedOn;
+    private object basedOn;
 
     public Kvp Record { get => entity; internal set => entity = value; }
 
-    public UpdateTransaction(Kvp entity, object basedOn, bool throwOnError) : base(throwOnError)
+    public static UpdateTransaction Create(VestPocketOptions options, Kvp entity, object basedOn, bool throwOnError)
     {
-        this.entity = entity;
-        this.basedOn = basedOn;
+        var transaction = pool.Get();
+        transaction.Reset(options, entity, basedOn, throwOnError);
+        transaction.serializer.Serialize(entity.Key, entity.Value);
+        return transaction;
+    }
+
+    private UpdateTransaction() : base()
+    {
     }
 
     public override bool Validate(object existingEntity)
@@ -42,6 +52,18 @@ internal class UpdateTransaction: Transaction
         //    return equatable.Equals(existingEntity);
         //}
         return existingEntity.Equals(basedOn);
+    }
+
+    public void Reset(VestPocketOptions options, Kvp entity, object basedOn, bool throwOnError)
+    {
+        base.Reset(options, throwOnError);
+        this.entity = entity;
+        this.basedOn = basedOn;
+    }
+
+    public void Dispose()
+    {
+        pool.Return(this);
     }
 
     public override int Count => 1;

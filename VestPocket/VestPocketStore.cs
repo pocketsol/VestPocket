@@ -10,16 +10,12 @@ namespace VestPocket;
 public class VestPocketStore : IDisposable
 {
     private readonly VestPocketOptions options;
-    //private readonly JsonWriterOptions jsonWriterOptions;
-    //private const byte LF_Byte = 10;
-
     private TransactionQueue transactionQueue;
     private TransactionLog transactionStore;
     private EntityStore entityStore;
     private string directory;
     private bool disposing = false;
 
-    private RecordSerializerFactory recordSerializerFactory;
 
     /// <summary>
     /// If this store has already started disposing
@@ -57,7 +53,6 @@ public class VestPocketStore : IDisposable
         this.options = options;
         ValidateOptions();
         this.options.Freeze();
-        this.recordSerializerFactory = new(options);
     }
 
     private void ValidateOptions()
@@ -97,8 +92,7 @@ public class VestPocketStore : IDisposable
                 () => new MemoryStream(),
                 SwapMemoryRewriteStream,
                 entityStore,
-                options,
-                new RecordSerializerFactory(options)
+                options
             );
         }
         else
@@ -116,8 +110,7 @@ public class VestPocketStore : IDisposable
                 RewriteFileStreamFactory,
                 SwapFileRewriteStream,
                 entityStore,
-                options, 
-                new RecordSerializerFactory(options)
+                options
                 );
         }
 
@@ -165,20 +158,14 @@ public class VestPocketStore : IDisposable
     /// Returns an array that contains the saved entities with their new version numbers.
     /// </returns>
     /// <exception>ConcurrencyException</exception>
-    public async Task Save(Kvp[] entities)
+    [AsyncMethodBuilder(typeof(PoolingAsyncValueTaskMethodBuilder))]
+    public async ValueTask Save(Kvp[] entities)
     {
         EnsureWriteAccess();
-        var transaction = new MultipleTransaction(entities, true);
-        transaction.Utf8JsonPayload = SerializeRecords(entities); ;
+        using var transaction = MultipleTransaction.Create(options, entities, false);
         transactionQueue.Enqueue(transaction);
         await transaction.Task;
-        ArrayPool<byte>.Shared.Return(transaction.Utf8JsonPayload.Array);
     }
-
-    //public async Task Delete<T>(T entity) where T : class, TEntity
-    //{
-    //    await Update(null, entity);
-    //}
 
     /// <summary>
     /// Saves an entity to the store, but only if the entity in the store
@@ -189,15 +176,13 @@ public class VestPocketStore : IDisposable
     /// <param name="entity">The entity to save</param>
     /// <param name="basedOn">The entity that is expected to currently to be in the store that
     /// the changes to the 'entity' parameter were applied to. Pass as null if no stored value is expected.</param>
-    public async Task Update<T>(Kvp entity, T basedOn)
+    [AsyncMethodBuilder(typeof(PoolingAsyncValueTaskMethodBuilder))]
+    public async ValueTask Update<T>(Kvp entity, T basedOn)
     {
-        var transaction = new UpdateTransaction(entity, basedOn, true);
+        var transaction = UpdateTransaction.Create(options, entity, basedOn, true);
         EnsureWriteAccess();
-        transaction.Utf8JsonPayload = SerializeRecord(entity);
         transactionQueue.Enqueue(transaction);
-        await transaction.Task.ConfigureAwait(false);
-        ArrayPool<byte>.Shared.Return(transaction.Utf8JsonPayload.Array);
-
+        await transaction.Task;
     }
 
     /// <summary>
@@ -210,52 +195,35 @@ public class VestPocketStore : IDisposable
     /// <param name="basedOn">The entity that is expected to currently to be in the store that
     /// the changes to the 'entity' parameter were applied to. Pass as null if no stored value is expected.</param>
     /// <returns>The entity stored for the key after the operation</returns>
-    public async Task<T> Swap<T>(Kvp entity, T basedOn)
+    [AsyncMethodBuilder(typeof(PoolingAsyncValueTaskMethodBuilder<>))]
+    public async ValueTask<T> Swap<T>(Kvp entity, T basedOn)
     {
         EnsureWriteAccess();
-        var transaction = new UpdateTransaction(entity, basedOn, false);
-        transaction.Utf8JsonPayload = SerializeRecord(entity);
+        using var transaction = UpdateTransaction.Create(options, entity, basedOn, false);
         transactionQueue.Enqueue(transaction);
-        await transaction.Task.ConfigureAwait(false);
-        ArrayPool<byte>.Shared.Return(transaction.Utf8JsonPayload.Array);
-        return (T)transaction.Record.Value;
+        await transaction.Task;
+        var result = (T)transaction.Record.Value;
+        return result;
     }
 
-    private ArraySegment<byte> SerializeRecords(Kvp[] entities)
-    {
-        var serializer = recordSerializerFactory.Create();
-        foreach (var entity in entities)
-        {
-            serializer.Serialize(entity.Key, entity.Value);
-        }
-        return serializer.RentWrittenBuffer();
-    }
-
-    private ArraySegment<byte> SerializeRecord(Kvp record)
-    {
-        var serializer = recordSerializerFactory.Create();
-        serializer.Serialize(record.Key, record.Value);
-        return serializer.RentWrittenBuffer();
-    }
 
     /// <summary>
     /// Saves an entity to the store.
     /// </summary>
     /// <param name="entity">The entity to save to the store</param>
     /// <exception>ConcurrencyException</exception>
-    public async Task Save(Kvp entity)
+    [AsyncMethodBuilder(typeof(PoolingAsyncValueTaskMethodBuilder))]
+    public async ValueTask Save(Kvp entity)
     {
         EnsureWriteAccess();
-        var transaction = new SingleTransaction(entity, true);
-        transaction.Utf8JsonPayload = SerializeRecord(entity);
+        using var transaction = SingleTransaction.Create(options, entity, false);
         transactionQueue.Enqueue(transaction);
-        await transaction.Task.ConfigureAwait(false);
-        ArrayPool<byte>.Shared.Return(transaction.Utf8JsonPayload.Array);
+        await transaction.Task;
     }
 
-    public Task Save<T>(string key, T value)
+    public async ValueTask Save<T>(string key, T value)
     {
-        return Save(new Kvp(key, value));
+        await Save(new Kvp(key, value));
     }
 
 
@@ -428,7 +396,7 @@ public class VestPocketStore : IDisposable
 
     internal async Task QueueNoOpTransaction()
     {
-        var transaction = new NoOpTransaction();
+        var transaction = NoOpTransaction.Create();
         transactionQueue.Enqueue(transaction);
         await transaction.Task;
     }
