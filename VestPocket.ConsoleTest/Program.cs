@@ -10,7 +10,7 @@ namespace VestPocket.ConsoleTest;
 class Program
 {
     static VestPocketStore connection;
-
+    
 
     static async Task Main(string[] args)
     {

@@ -13,8 +13,8 @@ public class VestPocketBenchmarks
 
     /// <summary>
     /// Number of iterations to run per method execution of methods that
-    /// take advantage of ThreadLocal and ValueTask source caching, so that
-    /// the amortized allocations can be shown instead of the per thread cost.
+    /// take advantage of ValueTaskSource poooling to amortize the cost
+    /// (This shouldn't be necessary, but it seems it is)
     /// </summary>
     public const int N = 10_000;
 
@@ -78,7 +78,7 @@ public class VestPocketBenchmarks
         }
     }
 
-    //[Benchmark(OperationsPerInvoke = BatchSize)]
+    [Benchmark(OperationsPerInvoke = BatchSize)]
     public async Task SaveBatch()
     {
         await store.Save(batchEntities);
