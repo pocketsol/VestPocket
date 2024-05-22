@@ -200,12 +200,12 @@ public class VestPocketStoreTests : IClassFixture<VestPocketStoreFixture>
         Assert.Equal(expected, actual);
     }
 
-    //[Fact]
+    [Fact]
     public async Task Save_UnregisteredTypeFails()
     {
         var unregisteredTypeDocument = new UnregisteredTypeDocument("SomeName", 5);
         var keyValuePair = new Kvp("SomeKey", unregisteredTypeDocument);
-        await testStore.Save(keyValuePair);
+        await Assert.ThrowsAsync<Exception>(async () => await testStore.Save(keyValuePair));
     }
 
     [Fact]
