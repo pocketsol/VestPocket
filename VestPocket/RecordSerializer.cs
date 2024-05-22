@@ -8,7 +8,7 @@ namespace VestPocket
     /// <summary>
     /// A serializer for serialization and deserialization of VestPocket records into JSON for writing
     /// to a file or stream. This uses Utf8JsonWriter together with source generated 
-    /// System.Text.Json.JsonSerializer (for the user defined object serialization0.
+    /// System.Text.Json.JsonSerializer (for the user defined object serialization).
     /// </summary>
     public class RecordSerializer
     {
