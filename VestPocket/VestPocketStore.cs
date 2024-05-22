@@ -16,7 +16,6 @@ public class VestPocketStore : IDisposable
     private string directory;
     private bool disposing = false;
 
-
     /// <summary>
     /// If this store has already started disposing
     /// </summary>
@@ -210,7 +209,7 @@ public class VestPocketStore : IDisposable
     /// <summary>
     /// Saves an entity to the store.
     /// </summary>
-    /// <param name="entity">The entity to save to the store</param>
+    /// <param name="entity">The key value pair to save to the store. Its value must be a type registered in the VestPocketStore's options with a call of AddType.</param>
     /// <exception>ConcurrencyException</exception>
     [AsyncMethodBuilder(typeof(PoolingAsyncValueTaskMethodBuilder))]
     public async ValueTask Save(Kvp entity)
@@ -221,6 +220,11 @@ public class VestPocketStore : IDisposable
         await transaction.Task;
     }
 
+    /// <summary>
+    /// Saves an entity with the given key and value to the store.
+    /// </summary>
+    /// <param name="key">The key to save the value under</param>
+    /// <param name="value">The value to store. Must be a type registered in the VestPocketStore's options with a call of AddType.</param>
     public async ValueTask Save<T>(string key, T value)
     {
         await Save(new Kvp(key, value));
@@ -228,7 +232,7 @@ public class VestPocketStore : IDisposable
 
 
     /// <summary>
-    /// Looks up an entity by key
+    /// Looks up a value by key
     /// </summary>
     /// <typeparam name="T">The type of the entity</typeparam>
     /// <param name="key">The exact key of the entity to find</param>
@@ -239,7 +243,7 @@ public class VestPocketStore : IDisposable
     }
 
     /// <summary>
-    /// Looks up an entity by key. Returned as a base entity type
+    /// Looks up a key value pair by key.
     /// </summary>
     /// <param name="key">The exact key of the entity to find</param>
     /// <returns>The entity stored with the key specified or null</returns>

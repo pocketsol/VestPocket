@@ -10,7 +10,7 @@ namespace VestPocket
     /// to a file or stream. This uses Utf8JsonWriter together with source generated 
     /// System.Text.Json.JsonSerializer (for the user defined object serialization).
     /// </summary>
-    public class RecordSerializer
+    internal class RecordSerializer
     {
 
         private static readonly JsonWriterOptions jsonWriterOptions = new JsonWriterOptions()
