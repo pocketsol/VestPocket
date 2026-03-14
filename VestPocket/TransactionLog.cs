@@ -68,7 +68,7 @@ internal class TransactionLog : IDisposable
         this.recordSerializer = new(options);
     }
 
-    private void Rewrite(bool isBackup)
+    private async Task Rewrite(bool isBackup)
     {
         rewriteReadyToComplete = false;
         rewriteIsBackup = isBackup;
@@ -87,13 +87,13 @@ internal class TransactionLog : IDisposable
 
         if (options.CompressOnRewrite)
         {
-            var allItems = memoryStore.Lookup.SearchValues(ReadOnlySpan<byte>.Empty);
+            var allItems = memoryStore.Lookup.Search(ReadOnlySpan<byte>.Empty);
             header.CompressedEntities = GetCompressedRewriteSegments(allItems, CancellationToken.None);
         }
 
         this.header.LastRewrite = DateTimeOffset.Now;
 
-        JsonSerializer.Serialize(
+        await JsonSerializer.SerializeAsync(
             rewriteStream,
             header,
             InternalSerializationContext.Default.StoreHeader
@@ -420,7 +420,7 @@ internal class TransactionLog : IDisposable
                         rewriteStream = rewriteStreamFactory();
 
                         memoryStore.ResetDeadSpace();
-                        rewriteTask = Task.Run(() => Rewrite(false));
+                        rewriteTask = Rewrite(false);
                     }
                 }
 
@@ -489,39 +489,32 @@ internal class TransactionLog : IDisposable
         await CreateBackup(backupFileStream, false);
     }
 
-    private async IAsyncEnumerable<byte[]> GetCompressedRewriteSegments(IEnumerable<object> entities, [EnumeratorCancellation] CancellationToken cancellationToken)
+    private async IAsyncEnumerable<byte[]> GetCompressedRewriteSegments(PrefixLookup<object>.Enumerator entities, [EnumeratorCancellation] CancellationToken cancellationToken)
     {
-        using var serializeStream = new MemoryStream();
+        recordSerializer.Reset();
         var compressedBackingStream = new MemoryStream();
         var brotliStream = new BrotliStream(compressedBackingStream, CompressionLevel.Optimal);
 
         foreach (var entity in entities)
         {
-            await JsonSerializer.SerializeAsync(serializeStream, entity, entity.GetType(), jsonSerializerContext, cancellationToken);
-            serializeStream.Write(LF, 0, 1);
+            recordSerializer.Serialize(entity.Key, entity.Value);
 
             // half of the large object heap size
-            if (serializeStream.Position > 42_500)
+            if (recordSerializer.Written > 42_500)
             {
-                serializeStream.SetLength(serializeStream.Position);
-                serializeStream.Position = 0;
-                await serializeStream.CopyToAsync(brotliStream, cancellationToken);
-                serializeStream.Position = 0;
+                recordSerializer.WriteToStream(brotliStream);
                 await brotliStream.FlushAsync(cancellationToken);
                 yield return compressedBackingStream.ToArray();
 
                 brotliStream.Dispose();
-
                 compressedBackingStream = new MemoryStream();
                 brotliStream = new BrotliStream(compressedBackingStream, CompressionLevel.Optimal);
             }
         }
 
-        if (serializeStream.Position > 0)
+        if (recordSerializer.Written > 0)
         {
-            serializeStream.SetLength(serializeStream.Position);
-            serializeStream.Position = 0;
-            await serializeStream.CopyToAsync(brotliStream, cancellationToken);
+            recordSerializer.WriteToStream(brotliStream);
             await brotliStream.FlushAsync(cancellationToken);
             yield return compressedBackingStream.ToArray();
         }

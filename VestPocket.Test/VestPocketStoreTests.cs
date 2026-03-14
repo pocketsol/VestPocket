@@ -209,6 +209,44 @@ public class VestPocketStoreTests : IClassFixture<VestPocketStoreFixture>
     }
 
     [Fact]
+    public async Task CompressOnRewrite_EntitiesCanBeReadAfterReopen()
+    {
+        string filePath = "compress_rewrite_test.db";
+        if (File.Exists(filePath)) File.Delete(filePath);
+
+        var options = new VestPocketOptions
+        {
+            FilePath = filePath,
+            JsonSerializerContext = SourceGenerationContext.Default,
+            CompressOnRewrite = true
+        };
+        options.AddType<TestDocument>();
+
+        var store = new VestPocketStore(options);
+        await store.OpenAsync(CancellationToken.None);
+        var testDocument = new TestDocument("SomeBody");
+        await store.Save(new Kvp("SomeKey", testDocument));
+        await store.ForceMaintenance();
+        await store.Close(CancellationToken.None);
+
+        var reopenOptions = new VestPocketOptions
+        {
+            FilePath = filePath,
+            JsonSerializerContext = SourceGenerationContext.Default,
+            CompressOnRewrite = true
+        };
+        reopenOptions.AddType<TestDocument>();
+
+        var reopenedStore = new VestPocketStore(reopenOptions);
+        await reopenedStore.OpenAsync(CancellationToken.None);
+        var retrieved = reopenedStore.Get<TestDocument>("SomeKey");
+        await reopenedStore.Close(CancellationToken.None);
+        File.Delete(filePath);
+
+        Assert.Equal(testDocument, retrieved);
+    }
+
+    [Fact]
     public async Task Backup_CanReadBackupEntities()
     {
         string filePath = "backup.db";
