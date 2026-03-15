@@ -100,12 +100,9 @@ namespace VestPocket
             FixedOverheadLength =
                 1 + // OpenObject
                 KeyProperty.Length +
-                1 + // Comma
-                TypeProperty.Length +
-                1 + // Comma
-                ValProperty.Length +
                 2 + // Key Double Quotes
-                2 + // Type Double Quotes
+                1 + // Comma (between key and type/val)
+                ValProperty.Length +
                 1 + // CloseObject
                 1; // LF
         }
@@ -229,8 +226,9 @@ namespace VestPocket
             keyBytes = keyBytes.Slice(0, Encoding.UTF8.GetBytes(key, keyBytes));
 
             int typeNameLength = serializationType is null ? 0 : serializationType.Utf8TypeName.Length;
+            int typeOverheadLength = serializationType is null ? 0 : TypeProperty.Length + 2 + 1; // header + double quotes + extra comma
 
-            var recordLength = FixedOverheadLength + keyBytes.Length + typeNameLength + entityLength;
+            var recordLength = FixedOverheadLength + keyBytes.Length + typeNameLength + typeOverheadLength + entityLength;
 
             // Make room in the record buffer to copy the serialized entity JSON and a linefeed
             var recordSpan = outputBuffer.GetMemory(recordLength).Span;
