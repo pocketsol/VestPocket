@@ -1,3 +1,4 @@
+using System.Runtime.CompilerServices;
 using System.Text;
 
 namespace VestPocket;
@@ -9,8 +10,9 @@ namespace VestPocket;
 internal class Node<T>
 {
     public string Key;
-    private ReadOnlyMemory<byte> KeySegment = EmptyBytes;
-    public ReadOnlyMemory<byte> KeyBytes = EmptyBytes;
+    private byte[] keyBytes = EmptyBytes;
+    private int keyBytesLength;
+    private int keySegmentStart;
 
     public Node<T>[] childrenBuffer = EmptyNodes;
     private Span<Node<T>> Children => childrenBuffer.AsSpan();
@@ -18,14 +20,25 @@ internal class Node<T>
     public byte FirstKeyByte;
 
     public static readonly Node<T>[] EmptyNodes = Array.Empty<Node<T>>();
-    public static readonly byte[] EmptyBytes = [];
+    private static readonly byte[] EmptyBytes = [];
 
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private int KeySegmentLength
+    {
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        get => keyBytesLength - keySegmentStart;
+    }
+
+    private ReadOnlySpan<byte> KeySegmentSpan
+    {
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        get => keyBytes.AsSpan(keySegmentStart, keyBytesLength - keySegmentStart);
+    }
+
     private int FindChildByFirstByte(byte searchKeyByte)
     {
         // The 'default' search is a basic binary search (see the 'default' case
         // But if we specialize and unroll for other size counts, those sizes
-        // can have improved performance. 
+        // can have improved performance.
         var buffer = childrenBuffer;
         int childCount = childrenBuffer.Length;
 
@@ -36,9 +49,6 @@ internal class Node<T>
                 int cmp = buffer[0].FirstKeyByte - searchKeyByte;
                 if (cmp == 0) return 0;
                 return cmp > 0 ? ~0 : ~1;
-            //if (buffer[0].FirstKeyByte == searchKeyByte) return 0;
-            //if (buffer[0].FirstKeyByte > searchKeyByte) return ~0;
-            //return ~1;
             case 2:
                 if (buffer[1].FirstKeyByte == searchKeyByte) return 1;
                 if (buffer[0].FirstKeyByte == searchKeyByte) return 0;
@@ -55,6 +65,127 @@ internal class Node<T>
                 if (buffer[1].FirstKeyByte > searchKeyByte) return ~1;
                 if (buffer[2].FirstKeyByte > searchKeyByte) return ~2;
                 return ~3;
+            case 4:
+                if (buffer[3].FirstKeyByte == searchKeyByte) return 3;
+                if (buffer[2].FirstKeyByte == searchKeyByte) return 2;
+                if (buffer[1].FirstKeyByte == searchKeyByte) return 1;
+                if (buffer[0].FirstKeyByte == searchKeyByte) return 0;
+
+                if (buffer[0].FirstKeyByte > searchKeyByte) return ~0;
+                if (buffer[1].FirstKeyByte > searchKeyByte) return ~1;
+                if (buffer[2].FirstKeyByte > searchKeyByte) return ~2;
+                if (buffer[3].FirstKeyByte > searchKeyByte) return ~3;
+                return ~4;
+            case 5:
+                if (buffer[4].FirstKeyByte == searchKeyByte) return 4;
+                if (buffer[3].FirstKeyByte == searchKeyByte) return 3;
+                if (buffer[2].FirstKeyByte == searchKeyByte) return 2;
+                if (buffer[1].FirstKeyByte == searchKeyByte) return 1;
+                if (buffer[0].FirstKeyByte == searchKeyByte) return 0;
+
+                if (buffer[0].FirstKeyByte > searchKeyByte) return ~0;
+                if (buffer[1].FirstKeyByte > searchKeyByte) return ~1;
+                if (buffer[2].FirstKeyByte > searchKeyByte) return ~2;
+                if (buffer[3].FirstKeyByte > searchKeyByte) return ~3;
+                if (buffer[4].FirstKeyByte > searchKeyByte) return ~4;
+                return ~5;
+
+            case 6:
+                int cmp6_2 = buffer[2].FirstKeyByte - searchKeyByte;
+                if (cmp6_2 == 0) return 2;
+                if (cmp6_2 < 0)
+                {
+                    if (buffer[5].FirstKeyByte == searchKeyByte) return 5;
+                    if (buffer[4].FirstKeyByte == searchKeyByte) return 4;
+                    if (buffer[3].FirstKeyByte == searchKeyByte) return 3;
+                    if (buffer[3].FirstKeyByte > searchKeyByte) return ~3;
+                    if (buffer[4].FirstKeyByte > searchKeyByte) return ~4;
+                    if (buffer[5].FirstKeyByte > searchKeyByte) return ~5;
+                    return ~6;
+                }
+
+                if (buffer[1].FirstKeyByte == searchKeyByte) return 1;
+                if (buffer[0].FirstKeyByte == searchKeyByte) return 0;
+
+                if (buffer[0].FirstKeyByte > searchKeyByte) return ~0;
+                if (buffer[1].FirstKeyByte > searchKeyByte) return ~1;
+                return ~2;
+
+            case 7:
+                int cmp7_3 = buffer[3].FirstKeyByte - searchKeyByte;
+                if (cmp7_3 == 0) return 3;
+                if (cmp7_3 < 0)
+                {
+                    if (buffer[6].FirstKeyByte == searchKeyByte) return 6;
+                    if (buffer[5].FirstKeyByte == searchKeyByte) return 5;
+                    if (buffer[4].FirstKeyByte == searchKeyByte) return 4;
+                    if (buffer[4].FirstKeyByte > searchKeyByte) return ~4;
+                    if (buffer[5].FirstKeyByte > searchKeyByte) return ~5;
+                    if (buffer[6].FirstKeyByte > searchKeyByte) return ~6;
+                    return ~7;
+                }
+
+                if (buffer[2].FirstKeyByte == searchKeyByte) return 2;
+                if (buffer[1].FirstKeyByte == searchKeyByte) return 1;
+                if (buffer[0].FirstKeyByte == searchKeyByte) return 0;
+
+                if (buffer[0].FirstKeyByte > searchKeyByte) return ~0;
+                if (buffer[1].FirstKeyByte > searchKeyByte) return ~1;
+                if (buffer[2].FirstKeyByte > searchKeyByte) return ~2;
+                return ~3;
+            case 8:
+                int cmp8_4 = buffer[4].FirstKeyByte - searchKeyByte;
+                if (cmp8_4 == 0) return 4;
+                if (cmp8_4 < 0)
+                {
+                    if (buffer[7].FirstKeyByte == searchKeyByte) return 7;
+                    if (buffer[6].FirstKeyByte == searchKeyByte) return 6;
+                    if (buffer[5].FirstKeyByte == searchKeyByte) return 5;
+
+                    if (buffer[5].FirstKeyByte > searchKeyByte) return ~5;
+                    if (buffer[6].FirstKeyByte > searchKeyByte) return ~6;
+                    if (buffer[7].FirstKeyByte > searchKeyByte) return ~7;
+                    return ~8;
+                }
+
+                if (buffer[3].FirstKeyByte == searchKeyByte) return 3;
+                if (buffer[2].FirstKeyByte == searchKeyByte) return 2;
+                if (buffer[1].FirstKeyByte == searchKeyByte) return 1;
+                if (buffer[0].FirstKeyByte == searchKeyByte) return 0;
+
+                if (buffer[0].FirstKeyByte > searchKeyByte) return ~0;
+                if (buffer[1].FirstKeyByte > searchKeyByte) return ~1;
+                if (buffer[2].FirstKeyByte > searchKeyByte) return ~2;
+                if (buffer[3].FirstKeyByte > searchKeyByte) return ~3;
+                return ~4;
+            case 9:
+                int cmp9_4 = buffer[4].FirstKeyByte - searchKeyByte;
+                if (cmp9_4 == 0) return 4;
+                if (cmp9_4 < 0)
+                {
+                    if (buffer[8].FirstKeyByte == searchKeyByte) return 8;
+                    if (buffer[7].FirstKeyByte == searchKeyByte) return 7;
+                    if (buffer[6].FirstKeyByte == searchKeyByte) return 6;
+                    if (buffer[5].FirstKeyByte == searchKeyByte) return 5;
+
+                    if (buffer[5].FirstKeyByte > searchKeyByte) return ~5;
+                    if (buffer[6].FirstKeyByte > searchKeyByte) return ~6;
+                    if (buffer[7].FirstKeyByte > searchKeyByte) return ~7;
+                    if (buffer[8].FirstKeyByte > searchKeyByte) return ~8;
+                    return ~9;
+                }
+
+                if (buffer[3].FirstKeyByte == searchKeyByte) return 3;
+                if (buffer[2].FirstKeyByte == searchKeyByte) return 2;
+                if (buffer[1].FirstKeyByte == searchKeyByte) return 1;
+                if (buffer[0].FirstKeyByte == searchKeyByte) return 0;
+
+                if (buffer[0].FirstKeyByte > searchKeyByte) return ~0;
+                if (buffer[1].FirstKeyByte > searchKeyByte) return ~1;
+                if (buffer[2].FirstKeyByte > searchKeyByte) return ~2;
+                if (buffer[3].FirstKeyByte > searchKeyByte) return ~3;
+                return ~4;
+
             case 10:
                 // Size 10 is very important. If this tree is used
                 // to store codes and ids, then its likely many
@@ -63,7 +194,7 @@ internal class Node<T>
                 // Unroll loop and manually binary search
                 int cmp5 = buffer[5].FirstKeyByte - searchKeyByte;
                 if (cmp5 == 0) return 5;
-                if (cmp5 < 0)
+                if (cmp5 < 0) // Its greater than index 5
                 {
                     int cmp8 = buffer[8].FirstKeyByte - searchKeyByte;
                     if (cmp8 == 0) return 8;
@@ -71,48 +202,54 @@ internal class Node<T>
                     {
                         int cmp9 = buffer[9].FirstKeyByte - searchKeyByte;
                         if (cmp9 == 0) return 9;
-                        if (cmp9 < 0) return ~9;
-                        return ~8;
+                        if (cmp9 < 0) return ~10; // No value greater than search value, return bitwise complement of the last index, plus one
+                        return ~9;
                     }
+
+                    // Its greater than 5 but less than 8
 
                     int cmp6 = buffer[6].FirstKeyByte - searchKeyByte;
                     if (cmp6 == 0) return 6;
-                    if (cmp6 < 0)
+                    if (cmp6 < 0) // Its value is between index 6 and 8 exclusive
                     {
                         int cmp7 = buffer[7].FirstKeyByte - searchKeyByte;
                         if (cmp7 == 0) return 7;
-                        if (cmp7 < 0) return ~7;
-                        return ~6;
+                        if (cmp7 < 0) return ~8; // Its value is between index 7 and 8
+                        return ~7;
                     }
-                    return ~5;
+                    // Its greater than 5, but less than 6
+                    return ~6;
                 }
 
                 int cmp2 = buffer[2].FirstKeyByte - searchKeyByte;
                 if (cmp2 == 0) return 2;
-                if (cmp2 < 0)
+                if (cmp2 < 0) // Its between index 2 and 5 exclusive
                 {
                     int cmp3 = buffer[3].FirstKeyByte - searchKeyByte;
                     if (cmp3 == 0) return 3;
-                    if (cmp3 < 0)
+                    if (cmp3 < 0) // Its between index 3 and 5 exclusive
                     {
                         int cmp4 = buffer[4].FirstKeyByte - searchKeyByte;
                         if (cmp4 == 0) return 4;
-                        if (cmp4 < 0) return ~4;
-                        return ~3;
+                        if (cmp4 < 0) return ~5; // Its greater than 4, but less than 5
+                        return ~4;
                     }
-                    return ~2;
+                    // Its greater than two, but less than 3
+                    return ~3;
                 }
+
+                // Its less than index 2
                 int cmp0 = buffer[0].FirstKeyByte - searchKeyByte;
                 if (cmp0 == 0) return 0;
-                if (cmp0 < 0)
+                if (cmp0 < 0) //Its less than index 2, but greater than index 0
                 {
                     int cmp1 = buffer[1].FirstKeyByte - searchKeyByte;
                     if (cmp1 == 0) return 1;
-                    if (cmp1 < 0) return ~1;
-                    return ~0;
-                };
+                    if (cmp1 < 0) return ~2;
+                    return ~1;
+                }
 
-                return -1;
+                return ~0;
 
             case 256:
                 // If the node has every possible ordered value, no need to search
@@ -121,19 +258,17 @@ internal class Node<T>
             default:
                 int lo = 0;
                 int hi = childCount - 1;
+
                 while (lo <= hi)
                 {
-                    int i = lo + (hi - lo >> 1);
-                    int c = buffer[i].FirstKeyByte - searchKeyByte;
-                    if (c == 0) return i;
-                    if (c < 0)
-                    {
-                        lo = i + 1;
-                    }
-                    else
-                    {
-                        hi = i - 1;
-                    }
+                    int i = (lo + hi) >> 1;
+                    byte v = buffer[i].FirstKeyByte;
+
+                    if (v == searchKeyByte)
+                        return i;
+
+                    lo = v < searchKeyByte ? i + 1 : lo;
+                    hi = v > searchKeyByte ? i - 1 : hi;
                 }
                 return ~lo;
         }
@@ -143,7 +278,7 @@ internal class Node<T>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public KeyValue<T> AsKeyValue()
     {
-        return new KeyValue<T>(Key!, KeyBytes, Value);
+        return new KeyValue<T>(Key!, keyBytes.AsMemory(0, keyBytesLength), Value);
     }
 
     /// <summary>
@@ -173,12 +308,11 @@ internal class Node<T>
                 ref Node<T> matchingChild = ref searchNode.childrenBuffer[matchingIndex]!;
 
                 int matchingLength = 1;
-                int childKeySegmentLength = matchingChild.KeySegment.Length;
+                int childKeySegmentLength = matchingChild.KeySegmentLength;
 
                 if (childKeySegmentLength > 1)
                 {
-                    var matchingChildKeySegment = matchingChild.KeySegment;
-                    ReadOnlySpan<byte> matchingChildKey = matchingChildKeySegment.Span;
+                    ReadOnlySpan<byte> matchingChildKey = matchingChild.KeySegmentSpan;
                     matchingLength = searchKey.CommonPrefixLength(matchingChildKey);
                 }
 
@@ -229,10 +363,11 @@ internal class Node<T>
                 if (keyBytes is null) keyBytes = key.ToArray();
                 var newChild = new Node<T>();
 
-                newChild.KeySegment = keyBytes.AsMemory(keyOffset, searchKey.Length);
+                newChild.keyBytes = keyBytes;
+                newChild.keySegmentStart = keyOffset;
+                newChild.keyBytesLength = keyOffset + searchKey.Length;
                 newChild.FirstKeyByte = keyBytes[keyOffset];
-                newChild.KeyBytes = keyBytes.AsMemory(0, keyOffset + searchKey.Length);
-                newChild.Key = Encoding.UTF8.GetString(newChild.KeyBytes.Span);
+                newChild.Key = Encoding.UTF8.GetString(keyBytes, 0, newChild.keyBytesLength);
                 newChild.Value = value;
                 searchNode = searchNode.CloneWithNewChild(newChild, insertChildAtIndex);
 
@@ -245,80 +380,16 @@ internal class Node<T>
     {
         var clone = new Node<T>();
         clone.Key = Key;
-        clone.KeySegment = KeySegment;
+        clone.keyBytes = keyBytes;
+        clone.keyBytesLength = keyBytesLength;
+        clone.keySegmentStart = keySegmentStart;
         clone.FirstKeyByte = FirstKeyByte;
-        clone.KeyBytes = KeyBytes;
         clone.Value = Value;
         if (copyChildren)
         {
             clone.childrenBuffer = childrenBuffer;
         }
         return clone;
-    }
-
-    private static readonly int[] ChildBuffersSizeLUT = GetChildBufferCapacitySizes();
-    private static int[] GetChildBufferCapacitySizes()
-    {
-        // The purpose of this lookup table is to assign child array sizes by bucketing
-        // around the assumption that many keys will map to ASCII based usage patterns.
-        int[] sizes = new int[256];
-        for (int i = 0; i < sizes.Length; i++)
-        {
-            if (i == 0)
-            {
-                sizes[i] = 0;
-            }
-            else if (i == 1)
-            {
-                sizes[i] = 1;
-            }
-            else if (i < 4)
-            {
-                sizes[i] = 4;
-            }
-            else if (i < 11) // Decimals
-            {
-                // Including a space for an
-                // arbitrary delimiter
-                sizes[i] = 10;
-            }
-            else if (i < 16) // GUID
-            {
-                // While 17 characters are possible,
-                // only 16 unique combinations can be at any
-                // given location within a string representation of
-                // a guid (as the hyphens are always at the same ordinals).
-                sizes[i] = 16;
-            }
-            else if (i < 32) // Alpha characters
-            {
-                // Enough to hold either uppercase or lowercase
-                // plus a couple delimiters, and added
-                // a few extra to round up to nearest power of 2
-                sizes[i] = 32;
-            }
-            else if (i < 65) // Base64
-            {
-                sizes[i] = 65;
-            }
-            else if (i < 95) // Printable ASCII
-            {
-                sizes[i] = 95;
-            }
-            else if (i < 128)
-            {
-                // Jump to full 128 or 256
-                // If we are using more than 95 unique byte values
-                // then there is a good chance we are storing something
-                // that is not heavily ascii based.
-                sizes[i] = 128;
-            }
-            else
-            {
-                sizes[i] = 256;
-            }
-        }
-        return sizes;
     }
 
     public Node<T> CloneWithNewChild(Node<T> newChild, int atIndex)
@@ -344,20 +415,17 @@ internal class Node<T>
 
         // We have to clone the child we split because we are changing its key size
         var splitChild = child.Clone(true);
-        var newOffset = atKeyLength;
-        var newCount = splitChild.KeySegment.Length - atKeyLength;
-        splitChild.KeySegment = splitChild.KeySegment.Slice(newOffset, newCount);
-        splitChild.FirstKeyByte = splitChild.KeySegment.Span[0];
+        splitChild.keySegmentStart += atKeyLength;
+        splitChild.FirstKeyByte = splitChild.keyBytes[splitChild.keySegmentStart];
 
         var splitParent = new Node<T>();
         splitParent.childrenBuffer = [splitChild];
 
-        var childKeySegment = child.KeySegment;
-        splitParent.KeySegment = childKeySegment.Slice(0, atKeyLength);
-        splitParent.FirstKeyByte = childKeySegment.Span[0];
-        var childKey = child.KeyBytes;
-        splitParent.KeyBytes = childKey.Slice(0, childKey.Length - childKeySegment.Length + atKeyLength);
-        splitParent.Key = Encoding.UTF8.GetString(splitParent.KeyBytes.Span);
+        splitParent.keyBytes = child.keyBytes;
+        splitParent.keySegmentStart = child.keySegmentStart;
+        splitParent.keyBytesLength = child.keySegmentStart + atKeyLength;
+        splitParent.FirstKeyByte = child.keyBytes[child.keySegmentStart];
+        splitParent.Key = Encoding.UTF8.GetString(splitParent.keyBytes, 0, splitParent.keyBytesLength);
 
         child = splitParent;
     }
@@ -373,7 +441,7 @@ internal class Node<T>
         {
             searchNode = searchNode.childrenBuffer[matchingIndex];
 
-            var keySegment = searchNode.KeySegment.Span;
+            var keySegment = searchNode.KeySegmentSpan;
             var keyLength = keySegment.Length;
             var bytesMatched = keyLength == 1 ? 1 : key.CommonPrefixLength(keySegment);
 
@@ -395,7 +463,7 @@ internal class Node<T>
         while (childIndex > -1)
         {
             node = node.childrenBuffer[childIndex];
-            var keySegment = node.KeySegment.Span;
+            var keySegment = node.KeySegmentSpan;
             var keyLength = keySegment.Length;
             var matchingBytes = keyLength == 1 ? 1 : key.CommonPrefixLength(keySegment);
 
@@ -434,10 +502,11 @@ internal class Node<T>
 
     internal void Reset()
     {
-        KeyBytes = default;
+        keyBytes = EmptyBytes;
+        keyBytesLength = 0;
+        keySegmentStart = 0;
         Value = default;
         childrenBuffer = EmptyNodes;
-        KeySegment = EmptyBytes;
     }
 
 

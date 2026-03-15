@@ -42,7 +42,7 @@ public class VestPocketBenchmarks
         options.JsonSerializerContext = SourceGenerationContext.Default;
 
         options.AddType<Entity>();
-        options.RewriteRatio = 1;
+        options.RewriteRatio = 2;
         options.Durability = VestPocketDurability.FileSystemCache;
         
         store = new VestPocketStore(options);
