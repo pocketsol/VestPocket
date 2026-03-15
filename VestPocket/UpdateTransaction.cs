@@ -43,9 +43,9 @@ internal class UpdateTransaction : Transaction, IDisposable
 
     private bool MatchesExisting(object existingEntity)
     {
-        if (basedOn is null && existingEntity is null)
+        if (existingEntity is null || basedOn is null)
         {
-            return true;
+            return existingEntity is null && basedOn is null;
         }
         //if (basedOn is IEquatable equatable)
         //{
