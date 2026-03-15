@@ -57,6 +57,7 @@ internal sealed class ObjectPool<T> where T : class
             if (Interlocked.Increment(ref _numItems) <= _maxCapacity)
             {
                 _items.Enqueue(obj);
+                return;
             }
 
             // no room, clean up the count and drop the object on the floor
