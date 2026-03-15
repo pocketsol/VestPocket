@@ -387,17 +387,10 @@ internal class TransactionLog : IDisposable
             outputStream.Write(LF, 0, 1);
         }
         outputStream.Write(payload);
+        rewriteTailBuffer?.Write(payload);
 
         var written = outputStream.Position - startingPosition;
         unflushed += (int)written;
-
-        if (rewriteTailBuffer != null)
-        {
-            if (rewriteTailBuffer != null)
-            {
-                outputStream.Write(payload);
-            }
-        }
 
         endingPosition = outputStream.Position;
 
@@ -409,8 +402,9 @@ internal class TransactionLog : IDisposable
         // Check if we need to start rewriting
         if (rewriteTailBuffer == null)
         {
-            var ratio = memoryStore.DeadEntityCount / memoryStore.EntityCount;
-            if (ratio > options.RewriteRatio && memoryStore.EntityCount > options.RewriteMinimum)
+            var entityCount = memoryStore.EntityCount;
+            var ratio = entityCount == 0 ? long.MaxValue : memoryStore.DeadEntityCount / memoryStore.EntityCount;
+            if (ratio > options.RewriteRatio && entityCount > options.RewriteMinimum)
             {
                 lock (rewriteLock)
                 {
