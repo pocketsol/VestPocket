@@ -36,7 +36,7 @@ public class VestPocketStore : IDisposable
     /// </summary>
     public double DeadSpacePercentage => entityStore.EntityCount == 0 ?
         0.0 :
-        entityStore.DeadEntityCount / entityStore.EntityCount;
+        (double)entityStore.DeadEntityCount / entityStore.EntityCount;
 
     /// <summary>
     /// Metrics about transactions performed on this store since it was opened.
