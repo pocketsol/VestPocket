@@ -19,24 +19,21 @@ This project is not a replacement for a networked database or a distributed cach
 
 # Setup
 
-After installing the nuget package, initialize a VestPocketOptions instance.
+After installing the nuget package, define the type(s) you want to store and configure them for serialization.
 
 ```csharp
-    [JsonDerivedType(typeof(Entity), nameof(Entity))]
-    public record class Entity(string Key, int Version, bool Deleted) : IEntity
-    {
-        public IEntity WithVersion(int version) { return this with { Version = version }; }
-    }
+    public record class Entity(string Body);
 
     [JsonSourceGenerationOptions(WriteIndented = false)]
     [JsonSerializable(typeof(Entity))]
     internal partial class VestPocketJsonContext : JsonSerializerContext { }
 ```
 
-Vest Pocket takes advantage of System.Text.Json source generated serialization. These lines of code setup a base entity type for storing in Vest Pocket as well as configuring it for source generated serialization. This is standard System.Text.Json configuration. More information about this topic can be found in the [System.Text.Json .NET 7.0 announcement](https://devblogs.microsoft.com/dotnet/system-text-json-in-dotnet-7/#polymorphism-using-contract-customization).
+Any type can be stored in Vest Pocket. A stored type is a plain object or record; it does not need to implement an interface, inherit from a base type, or carry `Key`, `Version`, or `Deleted` members. Records are stored as key/value pairs, where the key is supplied separately from the value (see [Saving a Record](#saving-a-record)).
 
+Vest Pocket takes advantage of System.Text.Json source generated serialization. The lines of code above configure the `Entity` type for source generated serialization. This is standard System.Text.Json configuration. More information about this topic can be found in the [System.Text.Json .NET 7.0 announcement](https://devblogs.microsoft.com/dotnet/system-text-json-in-dotnet-7/#polymorphism-using-contract-customization).
 
-Then add a JsonDerivedType attribute to the base entity for the new entity type. This is necessary for System.Text.Json to create source generated serialization and deserialization logic.
+Add a `JsonSerializable` attribute to the `JsonSerializerContext` for every type you intend to store. Each of those types must also be registered with the store's options through `AddType<T>()` (see below).
 
 # Usage
 
@@ -49,66 +46,108 @@ Then add a JsonDerivedType attribute to the base entity for the new entity type.
         CompressOnRewrite = true,
         Durability = VestPocketDurability.FlushOnDelay,
         FilePath = "store.db",
-        JsonSerializerContext = SourceGenerationContext.Default,
+        JsonSerializerContext = VestPocketJsonContext.Default,
         ReadOnly = false,
         Name = null,
         RewriteRatio = 1.0,
         RewriteMinimum = 10_000
     };
+    vestPocketOptions.AddType<Entity>();
+
     var store = new VestPocketStore(vestPocketOptions);
     await store.OpenAsync(CancellationToken.None);
 ```
- 
- The store will maintain exclusive read write access on the opened file. The methods on a VestPocketStore are thread safe; it is safe to pass a single instance of a store between methods on different threads (for example, you could register a store object as a singleton or single instance lifecycle for use in DI/IoC).
+
+Every type that will be stored must be registered with `AddType<T>()` before the store is opened. Attempting to save a value of an unregistered type will throw an exception. `AddType<T>()` accepts an optional `jsonTypeName` argument that overrides the value written to the record's `$type` property (it defaults to the type's name).
+
+The store will maintain exclusive read write access on the opened file. The methods on a VestPocketStore are thread safe; it is safe to pass a single instance of a store between methods on different threads (for example, you could register a store object as a singleton or single instance lifecycle for use in DI/IoC).
 
  ## Saving a Record
 
- ```csharp
-    var testEntity = new Entity("testKey", 0, false);
-    var updatedEntity = await store.Save(testEntity);
-```
-Entities are immutable. After a save, a new instance of the entity is returned with the increased version number. In the example above, testEntity will have a version of 0, and updatedEntity will have a version of 1.
+A record is a `Kvp` (key/value pair) of a string key and a value of any registered type.
 
-If you attempt to save an entity with a version number that does not match the version of the entity already stored for that key, a ConcurrencyException will be thrown. All saves to Vest Pocket require optimistic concurrency.
+ ```csharp
+    var testEntity = new Entity("some body text");
+    await store.Save(new Kvp("testKey", testEntity));
+```
+
+A key/value overload is also provided as a convenience:
+
+ ```csharp
+    await store.Save("testKey", testEntity);
+```
+
+`Save` writes the value unconditionally, overwriting any existing value for the key. To save several records together as a single transaction, pass an array of `Kvp` (see [Saving a Transaction](#saving-a-transaction)). To save only when the currently stored value matches an expected value, use `Update` or `Swap` (see [Optimistic Concurrency](#optimistic-concurrency)).
+
+In addition to registered types, string, boolean, and numeric values are handled implicitly and can be saved without registering a type:
+
+ ```csharp
+    await store.Save(new Kvp("testKey", "some string value"));
+```
 
 ## Getting a Record by Key
  ```csharp
-    var entity = await store.Get<Entity>("testKey");
+    var entity = store.Get<Entity>("testKey");
+```
+
+`Get` is synchronous and returns the stored value cast to the requested type, or null if no value is stored for the key. A non-generic overload returns the value as a `Kvp`:
+
+ ```csharp
+    Kvp record = store.Get("testKey");
 ```
 
 ## Getting Records by a Key Prefix
  ```csharp
- 
-    var results = await store.GetByPrefix<Entity>("test");
-    foreach(var entity in results)
+
+    foreach(var record in store.GetByPrefix("test"))
     {
+        var entity = (Entity)record.Value;
         //...
     }
 ```
+`GetByPrefix` is synchronous and enumerates the key/value pairs whose keys start with the supplied (case sensitive) prefix.
 
 
 ## Deleting a Record
+
+A record is deleted by saving a null value for its key.
+
  ```csharp
-    var entity = await store.Get<Entity>("testKey");
-    var entityToDelete = entity with { Deleted = true };
-    await store.Save(entity);
+    await store.Save(new Kvp("testKey", null));
 ```
 
  ## Saving a Transaction
 
  ```csharp
 
-    var testEntity = store.Get<Entity>("testKey");
-    var deletedTestEntity = testEntity with { Deleted = true };
-    var entity1 = new Entity("entity1", 0, false);
-    var entity2 = new Entity("entity2", 0, false);
+    var entities = new Kvp[]
+    {
+        new Kvp("entity1", new Entity("body1")),
+        new Kvp("entity2", new Entity("body2")),
+        new Kvp("testKey", null), // a delete can be part of a transaction
+    };
 
-    var entities = new[] { entity1, entity2, deletedTestEntity };
-
-    var updatedEntities = await store.Save(entities);
+    await store.Save(entities);
 
 ```
-Changes to multiple entities can be saved at the same time. If any entity has an out of date Version, then no changes will be applied.
+Changes to multiple records can be saved at the same time by passing an array of `Kvp` to `Save`. The array is applied as a single transaction.
+
+## Optimistic Concurrency
+
+`Update` and `Swap` apply a change only when the value currently stored for the key still matches a `basedOn` value. This is a compare-and-swap operation; pass `null` as `basedOn` when you expect no value to be stored for the key yet.
+
+ ```csharp
+    var current = store.Get<Entity>("testKey");
+    var updated = current with { Body = "updated body" };
+
+    // Throws ConcurrencyException if the stored value no longer matches `current`
+    await store.Update(new Kvp("testKey", updated), current);
+
+    // Swap does not throw; it returns the value that is currently stored
+    var stored = await store.Swap(new Kvp("testKey", updated), current);
+```
+
+If the stored value no longer matches `basedOn`, `Update` throws a `ConcurrencyException`, while `Swap` leaves the store unchanged and returns the value that is currently stored.
 
 ## Closing the Store
  ```csharp
@@ -128,13 +167,22 @@ Each file starts with a header row of JSON which contains some metadata about th
 
 ## Entities
 
-After a transaction is accepted, each entity in the transaction is serialized using System.Text.Json to a single line of text. The file store is an append only file, and old versions of entities are left in the file.
+After a transaction is accepted, each record in the transaction is serialized using System.Text.Json to a single line of text. The file store is an append only file, and old versions of records are left in the file.
+
+Each record is a JSON object with a `key` property, a `$type` property naming the registered type of the value, and a `val` property holding the serialized value.
 
  ```json
-{"$type":"Entity","Key":"3-0","Version":1,"Deleted":false,"Body":"Just some body text 3-0"}
-{"$type":"Entity","Key":"13-0","Version":1,"Deleted":false,"Body":"Just some body text 13-0"}
-{"$type":"Entity","Key":"6-0","Version":1,"Deleted":false,"Body":"Just some body text 6-0"}
-{"$type":"Entity","Key":"14-0","Version":1,"Deleted":false,"Body":"Just some body text 14-0"}
+{"key":"3-0","$type":"Entity","val":{"Body":"Just some body text 3-0"}}
+{"key":"13-0","$type":"Entity","val":{"Body":"Just some body text 13-0"}}
+{"key":"6-0","$type":"Entity","val":{"Body":"Just some body text 6-0"}}
+{"key":"14-0","$type":"Entity","val":{"Body":"Just some body text 14-0"}}
+```
+
+Values of implicitly handled types (strings, booleans, and numbers) are written without a `$type` property, and a deleted record is written with a null `val`:
+
+ ```json
+{"key":"6-0","val":"some string value"}
+{"key":"3-0","val":null}
 ```
 
 JSON is not a particularly compact format. It was chosen for this project for two reasons, it is relatively easy to read (and merge or diagnose) and because using System.Text.Json means that AOT friendly source generation can be utilized.
@@ -236,8 +284,15 @@ This test was performed with AOT against the same machine as the above Benchmark
 ## ReadOnly
 
 ```csharp
-    var options = new VestPocketOptions { FilePath = "test.db", ReadOnly = true };
-    var store = new VestPocketStore<Entity>(VestPocketJsonContext.Default.Entity, options);
+    var options = new VestPocketOptions
+    {
+        FilePath = "test.db",
+        JsonSerializerContext = VestPocketJsonContext.Default,
+        ReadOnly = true
+    };
+    options.AddType<Entity>();
+
+    var store = new VestPocketStore(options);
     await store.OpenAsync(CancellationToken.None);
 ```
 
