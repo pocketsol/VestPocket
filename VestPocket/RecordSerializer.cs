@@ -220,6 +220,12 @@ namespace VestPocket
                 JsonSerializer.Serialize(entityWriter, entity, serializationType.JsonTypeInfo);
             }
 
+            // Utf8JsonWriter buffers internally and only commits bytes to entityBuffer on Flush.
+            // JsonSerializer.Serialize flushes for us, but the manual Write*Value calls above do not,
+            // so without this flush a null/string/double/bool entity would report a length of 0 and
+            // produce a record with an empty val (e.g. {"key":"...","val":}) - malformed JSON.
+            entityWriter.Flush();
+
             var entityLength = entityBuffer.WrittenCount;
 
             Span<byte> keyBytes = stackalloc byte[key.Length * 4];

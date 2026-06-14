@@ -297,7 +297,12 @@ internal class TransactionLog : IDisposable
             catch (Exception)
             {
             }
-            if (record.Value != null)
+            // A successfully parsed record always has a non-null Key. A deletion is stored as a
+            // tombstone (a record with a valid Key but a null Value), and it must be replayed on
+            // load so the deletion overwrites any earlier live value for that key. Filtering on
+            // Value here would silently drop tombstones and resurrect deleted records on reopen.
+            // A failed parse leaves 'record' as default(Kvp) (null Key), which we skip.
+            if (record.Key != null)
             {
                 yield return record;
             }

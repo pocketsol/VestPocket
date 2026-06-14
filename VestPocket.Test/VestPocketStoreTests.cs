@@ -247,6 +247,52 @@ public class VestPocketStoreTests : IClassFixture<VestPocketStoreFixture>
     }
 
     [Fact]
+    public async Task Delete_TombstonePersistsAsValidJsonAndSurvivesReopen()
+    {
+        string filePath = "delete_tombstone_test.db";
+        if (File.Exists(filePath)) File.Delete(filePath);
+
+        var options = new VestPocketOptions
+        {
+            FilePath = filePath,
+            JsonSerializerContext = SourceGenerationContext.Default,
+        };
+        options.AddType<TestDocument>();
+
+        var store = new VestPocketStore(options);
+        await store.OpenAsync(CancellationToken.None);
+        var key = "SomeKey";
+        await store.Save(new Kvp(key, new TestDocument("SomeBody")));
+        // Deleting stores a null entity (tombstone).
+        await store.Save(new Kvp(key, null));
+        await store.Close(CancellationToken.None);
+
+        // Every line written to the store file must be valid JSON. A tombstone
+        // that was written with an empty val (e.g. {"key":"SomeKey","val":}) is malformed.
+        foreach (var line in await File.ReadAllLinesAsync(filePath))
+        {
+            if (string.IsNullOrWhiteSpace(line)) continue;
+            var ex = Record.Exception(() => System.Text.Json.JsonDocument.Parse(line));
+            Assert.True(ex is null, $"Store file contains malformed JSON line: {line}");
+        }
+
+        var reopenOptions = new VestPocketOptions
+        {
+            FilePath = filePath,
+            JsonSerializerContext = SourceGenerationContext.Default,
+        };
+        reopenOptions.AddType<TestDocument>();
+
+        var reopenedStore = new VestPocketStore(reopenOptions);
+        await reopenedStore.OpenAsync(CancellationToken.None);
+        var retrieved = reopenedStore.Get<TestDocument>(key);
+        await reopenedStore.Close(CancellationToken.None);
+        File.Delete(filePath);
+
+        Assert.Null(retrieved);
+    }
+
+    [Fact]
     public async Task Backup_CanReadBackupEntities()
     {
         string filePath = "backup.db";
