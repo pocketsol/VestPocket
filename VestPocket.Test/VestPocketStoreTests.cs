@@ -247,6 +247,134 @@ public class VestPocketStoreTests : IClassFixture<VestPocketStoreFixture>
     }
 
     [Fact]
+    public async Task DeterministicOutput_HeaderOmitsTimestampsAndEntitiesSurviveReopen()
+    {
+        string filePath = "deterministic_output_test.db";
+        if (File.Exists(filePath)) File.Delete(filePath);
+
+        var options = new VestPocketOptions
+        {
+            FilePath = filePath,
+            JsonSerializerContext = SourceGenerationContext.Default,
+            DeterministicOutput = true
+        };
+        options.AddType<TestDocument>();
+
+        var store = new VestPocketStore(options);
+        await store.OpenAsync(CancellationToken.None);
+        var testDocument = new TestDocument("SomeBody");
+        await store.Save(new Kvp("SomeKey", testDocument));
+        await store.ForceMaintenance();
+        await store.Close(CancellationToken.None);
+
+        AssertHeaderHasNoTimestamps(filePath);
+
+        var reopenOptions = new VestPocketOptions
+        {
+            FilePath = filePath,
+            JsonSerializerContext = SourceGenerationContext.Default,
+            DeterministicOutput = true
+        };
+        reopenOptions.AddType<TestDocument>();
+
+        var reopenedStore = new VestPocketStore(reopenOptions);
+        await reopenedStore.OpenAsync(CancellationToken.None);
+        var retrieved = reopenedStore.Get<TestDocument>("SomeKey");
+        await reopenedStore.Close(CancellationToken.None);
+        File.Delete(filePath);
+
+        Assert.Equal(testDocument, retrieved);
+    }
+
+    [Fact]
+    public async Task DeterministicOutput_StoresWithSameRecordsProduceIdenticalFiles()
+    {
+        string filePath1 = "deterministic_output_identical_test1.db";
+        string filePath2 = "deterministic_output_identical_test2.db";
+        if (File.Exists(filePath1)) File.Delete(filePath1);
+        if (File.Exists(filePath2)) File.Delete(filePath2);
+
+        // The records are saved in a different order to each store, and with a delay
+        // between the stores, so that only the rewritten contents are being compared.
+        await WriteRewrittenStore(filePath1, ["a", "b", "c"]);
+        await Task.Delay(20);
+        await WriteRewrittenStore(filePath2, ["c", "a", "b"]);
+
+        var bytes1 = await File.ReadAllBytesAsync(filePath1);
+        var bytes2 = await File.ReadAllBytesAsync(filePath2);
+        File.Delete(filePath1);
+        File.Delete(filePath2);
+
+        Assert.Equal(bytes1, bytes2);
+    }
+
+    [Fact]
+    public async Task DeterministicOutput_RewriteRemovesTimestampsFromExistingFile()
+    {
+        string filePath = "deterministic_output_existing_test.db";
+        if (File.Exists(filePath)) File.Delete(filePath);
+
+        var options = new VestPocketOptions
+        {
+            FilePath = filePath,
+            JsonSerializerContext = SourceGenerationContext.Default,
+        };
+        options.AddType<TestDocument>();
+
+        var store = new VestPocketStore(options);
+        await store.OpenAsync(CancellationToken.None);
+        await store.Save(new Kvp("SomeKey", new TestDocument("SomeBody")));
+        await store.Close(CancellationToken.None);
+
+        // The default options write timestamps to the header
+        var header = System.Text.Json.JsonDocument.Parse(File.ReadLines(filePath).First());
+        Assert.True(header.RootElement.TryGetProperty("Creation", out _));
+
+        var reopenOptions = new VestPocketOptions
+        {
+            FilePath = filePath,
+            JsonSerializerContext = SourceGenerationContext.Default,
+            DeterministicOutput = true
+        };
+        reopenOptions.AddType<TestDocument>();
+
+        var reopenedStore = new VestPocketStore(reopenOptions);
+        await reopenedStore.OpenAsync(CancellationToken.None);
+        await reopenedStore.ForceMaintenance();
+        await reopenedStore.Close(CancellationToken.None);
+
+        AssertHeaderHasNoTimestamps(filePath);
+        File.Delete(filePath);
+    }
+
+    private static async Task WriteRewrittenStore(string filePath, string[] keys)
+    {
+        var options = new VestPocketOptions
+        {
+            FilePath = filePath,
+            JsonSerializerContext = SourceGenerationContext.Default,
+            DeterministicOutput = true
+        };
+        options.AddType<TestDocument>();
+
+        var store = new VestPocketStore(options);
+        await store.OpenAsync(CancellationToken.None);
+        foreach (var key in keys)
+        {
+            await store.Save(new Kvp(key, new TestDocument("Body " + key)));
+        }
+        await store.ForceMaintenance();
+        await store.Close(CancellationToken.None);
+    }
+
+    private static void AssertHeaderHasNoTimestamps(string filePath)
+    {
+        var header = System.Text.Json.JsonDocument.Parse(File.ReadLines(filePath).First());
+        Assert.False(header.RootElement.TryGetProperty("Creation", out _), "Header contains a Creation timestamp");
+        Assert.False(header.RootElement.TryGetProperty("LastRewrite", out _), "Header contains a LastRewrite timestamp");
+    }
+
+    [Fact]
     public async Task Delete_TombstonePersistsAsValidJsonAndSurvivesReopen()
     {
         string filePath = "delete_tombstone_test.db";

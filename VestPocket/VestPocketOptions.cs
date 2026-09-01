@@ -62,6 +62,14 @@ public class VestPocketOptions
     public bool CompressOnRewrite { get; set; } = false;
 
     /// <summary>
+    /// If set, then the Creation and LastRewrite timestamps are omitted from the
+    /// header line of the store file. This produces store files that are stable
+    /// across rewrites and identical between stores that contain the same records,
+    /// which makes them easier to diff with line based tools. Default value is false
+    /// </summary>
+    public bool DeterministicOutput { get; set; } = false;
+
+    /// <summary>
     /// The strategy for file durability that will be used with this VestPocketStore.
     /// </summary>
     public VestPocketDurability Durability { get; set; } = VestPocketDurability.FlushOnDelay;

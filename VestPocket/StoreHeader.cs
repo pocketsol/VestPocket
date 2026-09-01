@@ -1,4 +1,6 @@
-﻿namespace VestPocket;
+﻿using System.Text.Json.Serialization;
+
+namespace VestPocket;
 
 /// <summary>
 /// Represents the JSON data that is stored in the first row of a VestPocket file.
@@ -6,7 +8,10 @@
 /// </summary>
 internal class StoreHeader
 {
-    public DateTimeOffset Creation { get; set; }
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public DateTimeOffset? Creation { get; set; }
+
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public DateTimeOffset? LastRewrite { get; set; }
     public IAsyncEnumerable<byte[]> CompressedEntities { get; set; }
 }

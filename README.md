@@ -165,6 +165,12 @@ Each file starts with a header row of JSON which contains some metadata about th
 {"Creation":"2022-12-14T17:38:24.1766817-05:00","LastRewrite":"2022-12-14T17:38:39.1187185-05:00","CompressedEntities":[...]}
 ```
 
+The timestamps make the header row change on every rewrite, even when the records in the store have not. If the `DeterministicOutput` option is set, the timestamps are omitted from the header so that rewrites of the same records produce identical files, which is useful when store files are diffed or kept in source control. Files written with or without timestamps can be opened by a store using either setting.
+
+```json
+{"CompressedEntities":null}
+```
+
 ## Entities
 
 After a transaction is accepted, each record in the transaction is serialized using System.Text.Json to a single line of text. The file store is an append only file, and old versions of records are left in the file.

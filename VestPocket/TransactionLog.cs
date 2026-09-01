@@ -82,7 +82,6 @@ internal class TransactionLog : IDisposable
         if (this.header == null)
         {
             this.header = new StoreHeader();
-            this.header.Creation = DateTimeOffset.Now;
         }
 
         if (options.CompressOnRewrite)
@@ -91,7 +90,18 @@ internal class TransactionLog : IDisposable
             header.CompressedEntities = GetCompressedRewriteSegments(allItems, CancellationToken.None);
         }
 
-        this.header.LastRewrite = DateTimeOffset.Now;
+        if (options.DeterministicOutput)
+        {
+            // Timestamps are cleared (rather than preserved from a loaded header)
+            // so that a rewrite of a file that had them produces a stable header line.
+            this.header.Creation = null;
+            this.header.LastRewrite = null;
+        }
+        else
+        {
+            this.header.Creation ??= DateTimeOffset.Now;
+            this.header.LastRewrite = DateTimeOffset.Now;
+        }
 
         await JsonSerializer.SerializeAsync(
             rewriteStream,
@@ -209,7 +219,12 @@ internal class TransactionLog : IDisposable
 
         if (outputStream.Length == 0)
         {
-            this.header = new StoreHeader { CompressedEntities = null, Creation = DateTimeOffset.Now, LastRewrite = null };
+            this.header = new StoreHeader
+            {
+                CompressedEntities = null,
+                Creation = options.DeterministicOutput ? null : DateTimeOffset.Now,
+                LastRewrite = null
+            };
             yield break;
         }
 
